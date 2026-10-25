@@ -1,0 +1,20 @@
+[Unit]
+Description=Collect Vélib raw snapshot and load it into PostgreSQL
+Wants=network-online.target
+After=network-online.target velib-db.service
+
+[Service]
+Type=oneshot
+User=velib
+Group=velib
+WorkingDirectory=/var/lib/velib
+EnvironmentFile=/etc/velib/app.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/velib/venv/bin/velib collect --process
+TimeoutStartSec=240
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/velib
+UMask=0077

@@ -69,7 +69,12 @@ def collection_history(items: list[Any], expected_interval_minutes: int = 5) -> 
 def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(prog="velib")
     commands = value.add_subparsers(dest="command", required=True)
-    commands.add_parser("collect", help="perform one collection and exit")
+    collect = commands.add_parser("collect", help="perform one collection and exit")
+    collect.add_argument(
+        "--process",
+        action="store_true",
+        help="load this snapshot into PostgreSQL after saving raw data",
+    )
     commands.add_parser("migrate", help="apply PostgreSQL migrations")
     process = commands.add_parser("process", help="reprocess eligible raw collections")
     process.add_argument("--collection-id")
@@ -88,6 +93,10 @@ def main() -> None:
     if args.command == "collect":
         metadata = collect_once(settings, store, build_client(settings))
         print(json.dumps(asdict(metadata), ensure_ascii=False, indent=2))
+        if args.process:
+            repository = PostgresRepository(require_database_url(settings))
+            metadata, body = store.read(metadata.collection_id)
+            repository.save_collection(metadata, transform_export(body))
     elif args.command == "migrate":
         applied = migrate(require_database_url(settings))
         print(json.dumps({"applied": applied}))

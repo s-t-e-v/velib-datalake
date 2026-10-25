@@ -1,0 +1,17 @@
+[Unit]
+Description=Vélib PostgreSQL container
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/velib
+ExecStart=/usr/bin/docker compose -f /opt/velib/compose.yml up -d --wait --wait-timeout 120
+ExecStop=/usr/bin/docker compose -f /opt/velib/compose.yml stop
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

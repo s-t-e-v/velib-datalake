@@ -1,6 +1,6 @@
 # Vélib’ datalake — first vertical slice
 
-This repository collects the official Vélib’ real-time availability export, preserves each raw response, and reproducibly loads station observations into local PostgreSQL. It then calculates one indicator:
+This repository collects the official Vélib’ real-time availability export, preserves each raw response, and reproducibly loads station observations into PostgreSQL (on an Azure VM or locally). It then calculates one indicator:
 
 > Among stations open for rental with valid and sufficiently fresh observations, what proportion have zero available bicycles?
 
@@ -13,16 +13,20 @@ Paris Open Data full JSON export
               |
               | every 5 minutes UTC / one request and exit
               v
-Azure Function (Python 3.12, Flex Consumption)
+Ubuntu VM: systemd timer -> velib collect --process
               |
               | response.json, then metadata.json commit marker
               v
-private Azure Blob container
+private Azure Blob container (durable raw lake)
+              |
+              | only the current eligible snapshot, after raw persistence
+              v
+PostgreSQL 17 in Docker on the VM -> indicator JSON
 
 Local equivalent: API -> ./raw -> transform -> PostgreSQL -> indicator JSON
 ```
 
-The Azure collector does not connect to PostgreSQL. PostgreSQL remains local in this slice. The same raw-store interface supports a local directory and Azure Blob Storage; the processing command reads whichever backend is configured.
+The VM runs both the collector and PostgreSQL. Blob Storage is the durable source of truth; SQL is rebuildable from eligible raw collections. The same raw-store interface supports a local directory and Azure Blob Storage. See the [Azure VM runbook](docs/azure-vm.md) for the Azure CLI deployment, bootstrap, operations, and recovery steps.
 
 ## Source exploration
 
@@ -93,7 +97,9 @@ HTTP error bodies are preserved but remain ineligible. A network failure has no 
 
 The HTTP client has connect/read timeouts and bounded retries for 408, 429 and transient 5xx responses. It delegates `Retry-After` handling to urllib3. JSON, top-level schema, minimum-row, duplicate-identifier and per-record validation are explicit. Logs include collection IDs and failure categories, never credentials or response bodies.
 
-The Azure timer monitor prevents a second scheduled invocation while one is outstanding. The collector additionally holds a local file lock or Azure blob lease, covering manual/concurrent invocations. Failed attempts remain visible through `velib collections` and Application Insights. The command compares consecutive attempt timestamps and reports inferred missing five-minute runs. A complete Function App outage can still create a schedule gap without raw metadata; timer `past_due` warnings and Azure monitoring remain the authoritative alerting path.
+The VM's systemd timer schedules collection every five UTC minutes, with `Persistent=true`, `RandomizedDelaySec=15`, and `OnBootSec=30`. systemd does not start another instance of the same service while it is active; the collector also uses a local file lock or Azure blob lease. Failed collection attempts remain visible through `velib collections`; service failures and SQL errors are inspected with `journalctl`. The history command reports inferred gaps between attempt timestamps, but an outage can leave no metadata. Persistent scheduling does not replay every missed snapshot. No monitoring workspace or managed alerting is deployed.
+
+`velib collect --process` saves raw data first and then loads only that collection into SQL. A SQL failure does not remove the raw collection, and later timer runs do **not** automatically backfill it. On the VM, `sudo velib-admin process` reprocesses all eligible blobs idempotently; its listing, reads, and SQL work grow with lake size.
 
 ## Local usage
 
@@ -162,43 +168,19 @@ The focused test example has six source rows: one missing/invalid row plus one r
 
 ## Azure deployment
 
-The deployment is based on Microsoft's current Python timer-trigger Flex Consumption pattern:
+Follow the [Azure VM runbook](docs/azure-vm.md). The supported workflow is **Azure CLI**, not `azd up`: compile `infra/main.bicep`, review a subscription-scoped what-if, explicitly deploy, then run `make vm-deploy` on your laptop to upload, bootstrap, and verify the application over SSH.
 
-- Azure Functions runtime v4, Python 3.12, Python v2 decorator model.
-- Flex Consumption on Linux; the legacy Linux Consumption plan is not selected.
-- `0 */5 * * * *`, which Azure documents as every five minutes. Flex Consumption uses UTC by default; no unsupported Linux `WEBSITE_TIME_ZONE` setting is added.
-- `run_on_startup=False` and `use_monitor=True`.
-- User-assigned managed identity and identity-based `AzureWebJobsStorage`.
-- Shared-key access and anonymous blob access disabled.
-- Storage public networking disabled; Blob and Queue private endpoints plus Function VNet integration are provisioned.
-- The runtime gets Storage Blob Data Owner because Microsoft documents it as the default role required for identity-based timer host storage, plus Storage Queue Data Contributor and Monitoring Metrics Publisher. The deploying user gets Blob Data Owner for package deployment. No role is granted to PostgreSQL because PostgreSQL is local.
-- No lifecycle deletion policy is configured for raw data.
+- Ubuntu VM, default size `Standard_B2ats_v2`, default region `francecentral`; check regional availability, quota, and pricing first. Free-trial credit does not make every resource free.
+- PostgreSQL 17 runs in Docker, bound only to `127.0.0.1:5432`, with persistent data on the VM OS disk.
+- The NSG allows only SSH from the supplied caller IPv4 `/32`; use an SSH tunnel for SQL access.
+- The Blob endpoint is publicly reachable, but `velib-raw` is private: OAuth access only, no anonymous or shared-key access. The VM's system-assigned managed identity and the deploying **user** receive Storage Blob Data Contributor.
+- No raw-data lifecycle deletion policy and no monitoring workspace are deployed.
 
-References:
-
-- [Python versions supported by Azure Functions](https://learn.microsoft.com/azure/azure-functions/functions-versions)
-- [Python v2 trigger/decorator model](https://learn.microsoft.com/azure/azure-functions/functions-bindings-triggers-python)
-- [Timer trigger schedule, UTC, locking and overlap behavior](https://learn.microsoft.com/azure/azure-functions/functions-bindings-timer)
-- [Flex Consumption hosting](https://learn.microsoft.com/azure/azure-functions/flex-consumption-plan)
-- [Official Python timer/Flex sample](https://github.com/Azure-Samples/functions-quickstart-python-azd-timer)
-- [Passwordless Blob access with `DefaultAzureCredential`](https://learn.microsoft.com/azure/storage/blobs/storage-quickstart-blobs-python)
-
-No Azure command has been run by this project. To provision later:
-
-```bash
-azd auth login
-azd env new interview
-azd env set AZURE_LOCATION francecentral
-azd up
-```
-
-`azd up` creates billable resources and modifies the selected subscription. Review `infra/` and run `az bicep build --file infra/main.bicep` before deployment.
-
-Because storage is network-isolated, a workstation cannot directly process Azure blobs unless it has private network connectivity to the deployed VNet. Local end-to-end work uses the local raw directory. Adding a controlled transfer path or private developer connectivity is a later operational decision; weakening storage networking silently is not part of this slice.
+`function_app.py` and the old Function infrastructure modules remain unused legacy code; they are not the active deployment architecture. The first cloud deployment was verified on 2026-10-25 using `Standard_D2als_v7` in France Central; the default B-series size was unavailable. See the runbook for verification boundaries.
 
 ## Verification status and limitations
 
-Locally tested:
+Previously reported local checks (not evidence of a working Azure deployment):
 
 - response validation and transformation;
 - missing/stale/closed exclusion behavior and explicit `0.5` example;
@@ -207,7 +189,7 @@ Locally tested:
 - incomplete collection invisibility;
 - PostgreSQL migration and duplicate-free reprocessing against PostgreSQL 17 in Docker;
 - a live 1,519-row collection, raw persistence, processing and indicator calculation;
-- lint and unit tests listed above (see the latest task report for exact results).
+- lint and unit tests listed above. Rerun these commands for the current checkout; these historical results do not validate the new VM/bootstrap path.
 
 Live API checked:
 
@@ -215,9 +197,11 @@ Live API checked:
 - paginated total count;
 - full-export count, duplicate station IDs, missing required fields and timestamp range.
 
+Verified on Azure on 2026-10-25: provisioning, SSH bootstrap, managed-identity Blob writes, authenticated laptop Blob listing, PostgreSQL migration/load, an active five-minute timer, and an indicator from the initial 1,519-row collection. Local validation: 15 tests passed, one database integration test skipped because `TEST_DATABASE_URL` was unset.
+
 Not yet verified:
 
-- Azure provisioning, package deployment, managed-identity permissions, VNet/private DNS behavior, timer execution, Application Insights alerts, or live Blob writes;
+- subsequent scheduled invocations, PostgreSQL persistence across reboot/container replacement, or end-to-end cloud recovery;
 - source behavior during concurrent export updates, prolonged failures, schema changes, quota exhaustion, or anomalous clock skew.
 
 These boundaries are intentional and should be stated plainly in an interview.
