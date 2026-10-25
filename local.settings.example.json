@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "TIMER_SCHEDULE": "0 */5 * * * *",
+    "VELIB_STORAGE_BACKEND": "local",
+    "VELIB_LOCAL_RAW_DIR": "./raw",
+    "VELIB_MIN_RECORDS": "1000",
+    "VELIB_FRESHNESS_MINUTES": "45"
+  }
+}
+
