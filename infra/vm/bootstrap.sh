@@ -50,7 +50,11 @@ EOF
 chmod 600 /etc/velib/*.env
 install -m 644 infra/vm/compose.yml /opt/velib/compose.yml
 install -m 755 infra/vm/velib-admin /usr/local/bin/velib-admin
-install -m 644 infra/vm/velib-db.service infra/vm/velib-collect.service infra/vm/velib-collect.timer /etc/systemd/system/
+install -m 644 \
+    infra/vm/systemd/velib-db.service \
+    infra/vm/systemd/velib-collect.service \
+    infra/vm/systemd/velib-collect.timer \
+    /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now velib-db.service
 velib-admin migrate

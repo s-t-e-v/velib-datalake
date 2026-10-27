@@ -2,7 +2,7 @@
 # Run from the laptop. Discover endpoints from the existing Azure deployment.
 set -euo pipefail
 if [[ $# != 2 ]]; then
-    echo 'Usage: bash infra/vm/deploy.sh DEPLOYMENT_NAME SSH_PRIVATE_KEY' >&2
+    echo 'Usage: bash scripts/deploy-app.sh DEPLOYMENT_NAME SSH_PRIVATE_KEY' >&2
     exit 1
 fi
 deployment=$1
@@ -14,7 +14,7 @@ if [[ ! -f $key ]]; then
     echo "SSH private key not found: $key" >&2
     exit 1
 fi
-root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 az deployment sub show --name "$deployment" --query properties.outputs --output json > "$work/outputs.json"

@@ -61,7 +61,7 @@ def deployment_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
 
 def deploy(env: dict[str, str], key: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(ROOT / "infra/vm/deploy.sh"), "velib-dev", str(key)],
+        ["bash", str(ROOT / "scripts/deploy-app.sh"), "velib-dev", str(key)],
         cwd=key.parent,
         env=env,
         capture_output=True,

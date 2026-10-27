@@ -114,7 +114,7 @@ make vm-deploy
 make vm-deploy VM_DEPLOYMENT=velib-dev SSH_KEY=~/.ssh/another-key
 ```
 
-This calls `infra/vm/deploy.sh`, discovers the VM IP and Blob URL from the existing subscription deployment, uploads an allowlisted archive, runs bootstrap, and checks the timer, collection logs, and indicator. It does not provision infrastructure. It preserves the existing database password and data, but rerunning installs the current code, rewrites the app configuration, and triggers collection. Keep the SSH key on your laptop. The key must be usable noninteractively (no passphrase, or unlocked in an SSH agent), and the VM host key must already be verified and trusted. Host-key checking is never disabled. A bootstrap error stops the script and prints recent service logs; inspect the error before retrying.
+This calls `scripts/deploy-app.sh`, discovers the VM IP and Blob URL from the existing subscription deployment, uploads an allowlisted archive, runs bootstrap, and checks the timer, collection logs, and indicator. It does not provision infrastructure. It preserves the existing database password and data, but rerunning installs the current code, rewrites the app configuration, and triggers collection. Keep the SSH key on your laptop. The key must be usable noninteractively (no passphrase, or unlocked in an SSH agent), and the VM host key must already be verified and trusted. Host-key checking is never disabled. A bootstrap error stops the script and prints recent service logs; inspect the error before retrying.
 
 For the equivalent manual steps:
 

@@ -120,7 +120,7 @@ source .env
 set +a
 
 uv sync --extra dev
-docker compose up -d postgres
+docker compose -f dev/compose.yml up -d postgres
 uv run velib migrate
 uv run velib collect
 uv run velib collections
@@ -132,7 +132,7 @@ Equivalent end-to-end convenience command:
 
 ```bash
 make install
-make e2e
+make dev-e2e
 ```
 
 Reprocess one raw collection without duplicating observations:

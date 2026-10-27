@@ -169,6 +169,21 @@ Infrastructure is deployed explicitly with Azure CLI and Bicep. Application code
 over SSH and bootstrapped with `make vm-deploy`; Azure Developer CLI and Azure Functions are not
 part of the active architecture.
 
+Repository paths reflect their execution boundary:
+
+- `dev/compose.yml` runs development PostgreSQL and is not uploaded;
+- `scripts/deploy-app.sh` runs from the operator workstation and is not uploaded;
+- `infra/main.bicep`, its modules, and local parameter files are submitted to Azure Resource
+  Manager but are not installed on the VM;
+- `infra/vm/` contains the bootstrap and runtime assets intentionally included in the release
+  archive.
+
+The release archive temporarily contains the Python sources, migrations, package metadata,
+README, and `infra/vm/`. Bootstrap installs the Python package and virtual environment under
+`/opt/velib`, configuration under `/etc/velib`, administrative command under `/usr/local/bin`,
+systemd units under `/etc/systemd/system`, and PostgreSQL files under `/var/lib/velib`. The
+temporary uploaded release is deleted after bootstrap.
+
 The initial live deployment verified provisioning, bootstrap, managed-identity Blob writes,
 PostgreSQL migration and loading, an active timer, authenticated Blob listing, and indicator
 calculation. Reboot recovery, later scheduled invocations, prolonged source failures, and a full
