@@ -28,6 +28,12 @@ Local equivalent: API -> ./raw -> transform -> PostgreSQL -> indicator JSON
 
 The VM runs both the collector and PostgreSQL. Blob Storage is the durable source of truth; SQL is rebuildable from eligible raw collections. The same raw-store interface supports a local directory and Azure Blob Storage. See the [Azure VM runbook](docs/azure-vm.md) for the Azure CLI deployment, bootstrap, operations, and recovery steps.
 
+Architecture documentation:
+
+- [ADR 0001: initial vertical slice](docs/architecture/0001-initial-vertical-slice.md) preserves the original design and the hypotheses it introduced.
+- [Current architecture](docs/architecture/current-architecture.md) describes the implemented runtime, data flow, storage, and failure semantics.
+- [Engineering handoff](docs/architecture/engineering-handoff.md) records weaknesses, legacy code, improvement options, and a suggested delivery sequence.
+
 ## Source exploration
 
 Live checks were made on 2026-10-25 UTC with a small number of requests.
