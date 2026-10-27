@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": { "value": "dev" },
+    "location": { "value": "francecentral" },
+    "sshPublicKey": { "value": "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY velib-dev" },
+    "deployerPrincipalId": { "value": "REPLACE_WITH_YOUR_USER_OBJECT_ID" },
+    "sshAllowedCidr": { "value": "203.0.113.10/32" },
+    "vmSize": { "value": "Standard_B2ats_v2" }
+  }
+}

@@ -34,21 +34,10 @@ cat ~/.ssh/velib-dev.pub
 
 Keep `~/.ssh/velib-dev` private and local. Only the `.pub` contents go into deployment parameters. Obtain your current public outbound **IPv4** address (the address Azure sees, including any VPN/NAT) and use that address followed by `/32`. Never use `0.0.0.0/0` for convenience.
 
-Create `infra/dev.local.parameters.json` locally, replacing the example values:
+Copy the tracked parameter template, then replace every placeholder in the local copy:
 
-```json
-{
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-  "contentVersion": "1.0.0.0",
-  "parameters": {
-    "environmentName": { "value": "dev" },
-    "location": { "value": "francecentral" },
-    "sshPublicKey": { "value": "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY velib-dev" },
-    "deployerPrincipalId": { "value": "REPLACE_WITH_YOUR_USER_OBJECT_ID" },
-    "sshAllowedCidr": { "value": "203.0.113.10/32" },
-    "vmSize": { "value": "Standard_B2ats_v2" }
-  }
-}
+```bash
+cp infra/dev.local.parameters.json.example infra/dev.local.parameters.json
 ```
 
 `environmentName` is supplied as `dev` by the parameter file, not defaulted by the template. `sshPublicKey`, `deployerPrincipalId`, and `sshAllowedCidr` are required. `location` and `vmSize` default to the values shown and may be omitted or overridden after checking availability/cost.
