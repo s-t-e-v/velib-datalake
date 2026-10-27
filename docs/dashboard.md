@@ -53,63 +53,64 @@ dashboard.
 
 ## Run locally against the Azure VM through SSH
 
-Do not expose PostgreSQL or Grafana publicly. Create a dedicated read-only PostgreSQL login once
-from a trusted SSH session on the VM:
+Do not expose PostgreSQL or Grafana publicly. The presentation migration must already be applied
+on the VM. Create the dedicated read-only PostgreSQL login and its local Compose secret once:
 
 ```bash
-cd /opt/velib
-sudo docker compose -f compose.yml exec postgres psql -U velib -d velib
+bash scripts/dashboard-password.sh <VM_PUBLIC_IP>
 ```
 
-In `psql`, choose a new password interactively so it is not placed in shell history:
-
-```sql
-CREATE ROLE velib_dashboard LOGIN;
-\password velib_dashboard
-GRANT CONNECT ON DATABASE velib TO velib_dashboard;
-GRANT USAGE ON SCHEMA public TO velib_dashboard;
-GRANT SELECT ON pipeline_health, collection_quality,
-    zero_bicycle_indicator_history, latest_station_status,
-    station_availability_history, postgres_storage_usage
-    TO velib_dashboard;
-```
-
-The presentation migration must already be applied on the VM. Leave this tunnel running on the
-laptop:
+The script generates a hexadecimal password, creates or updates `velib_dashboard`, grants only the
+presentation-view permissions, and stores the password at
+`.secrets/velib-dashboard-password`. It never prints the password. The `.secrets` directory is
+ignored by Git and has mode `700`. Standalone Compose bind-mounts the source without remapping it,
+so the password file uses mode `604`: its owner can read and write it, and the non-root Grafana
+process can read the direct mount. Other workstation users cannot traverse the private parent
+directory. Rotate it explicitly when required:
 
 ```bash
-ssh -i ~/.ssh/velib-dev \
-  -N \
-  -L 15432:127.0.0.1:5432 \
-  azureuser@<VM_PUBLIC_IP>
+bash scripts/dashboard-password.sh <VM_PUBLIC_IP> \
+  ~/.ssh/velib-dev \
+  "$PWD/.secrets/velib-dashboard-password" \
+  --rotate
 ```
 
-In a second terminal, enter the dashboard password without echoing it, configure the container to
-use the tunnel, and start only Grafana:
+Leave the tunnel running on the laptop:
 
 ```bash
-read -rsp 'Dashboard database password: ' VELIB_GRAFANA_DB_PASSWORD
-export VELIB_GRAFANA_DB_PASSWORD
-export VELIB_GRAFANA_DB_HOST=host.docker.internal
-export VELIB_GRAFANA_DB_PORT=15432
-export VELIB_GRAFANA_DB_NAME=velib
-export VELIB_GRAFANA_DB_USER=velib_dashboard
-export VELIB_GRAFANA_DB_SSL_MODE=disable
+bash scripts/dashboard-tunnel.sh <VM_PUBLIC_IP>
+```
+
+The script binds the forwarded port to Docker's host-gateway address rather than laptop loopback.
+On native Linux, `host.docker.internal` resolves to that gateway; a tunnel bound only to
+`127.0.0.1` is not reachable from the Grafana container. The gateway address is reachable by
+local containers but is not a listener on the laptop's LAN interfaces. The script also requires a
+previously verified SSH host key and exits if the port forward cannot be established.
+
+In a second terminal, start only Grafana. The Make target uses the standard secret path and sets
+the remote database host, port, name, user, and SSL mode:
+
+```bash
 make dashboard-remote-up
 ```
 
+To use a nonstandard secret location, set `DASHBOARD_REMOTE_SECRET=/absolute/path` on the Make
+command line.
+
 The database connection from Grafana to `host.docker.internal:15432` is carried through the SSH
 tunnel. PostgreSQL remains bound to VM loopback, and Grafana remains bound to laptop loopback.
-Unset the password after stopping Grafana:
+Stop Grafana with:
 
 ```bash
 make dashboard-down
-unset VELIB_GRAFANA_DB_PASSWORD
 ```
 
-The password is passed to the Grafana container as an environment variable and stored encrypted
-in Grafana's internal database. It is not written to a tracked file. This is suitable for the
-private workstation spike, not yet a cloud-hosting design.
+Compose mounts the password read-only at `/run/secrets/velib_grafana_db_password`; it is not
+present in the container environment. Grafana reads the file while provisioning the data source
+and stores the value encrypted in its internal database. Standalone Compose secrets are
+permission-scoped file mounts rather than an encrypted secret store, so the protected local source
+file remains part of the workstation trust boundary. This is suitable for the private workstation
+spike, not yet a cloud-hosting design.
 
 ## Boundaries
 
@@ -117,6 +118,7 @@ private workstation spike, not yet a cloud-hosting design.
   systemd state, Blob capacity, or a dead VM.
 - The dashboard provides no alerts and does not run when the laptop is off.
 - No public API, reverse proxy, TLS endpoint, or public inbound port is introduced.
+- Local development PostgreSQL is bound to laptop loopback only.
 - The local Compose defaults use the development database credentials and must not be reused for
   the Azure VM. The VM workflow above uses the dedicated read-only login.
 - The dashboard is not a substitute for the later recovery and external-monitoring work.

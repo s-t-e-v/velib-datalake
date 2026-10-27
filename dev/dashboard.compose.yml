@@ -17,8 +17,9 @@ services:
       VELIB_GRAFANA_DB_PORT: "${VELIB_GRAFANA_DB_PORT:-5432}"
       VELIB_GRAFANA_DB_NAME: "${VELIB_GRAFANA_DB_NAME:-velib}"
       VELIB_GRAFANA_DB_USER: "${VELIB_GRAFANA_DB_USER:-velib}"
-      VELIB_GRAFANA_DB_PASSWORD: "${VELIB_GRAFANA_DB_PASSWORD:-velib}"
       VELIB_GRAFANA_DB_SSL_MODE: "${VELIB_GRAFANA_DB_SSL_MODE:-disable}"
+    secrets:
+      - velib_grafana_db_password
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
@@ -30,6 +31,10 @@ services:
       timeout: 3s
       retries: 20
       start_period: 20s
+
+secrets:
+  velib_grafana_db_password:
+    file: "${VELIB_GRAFANA_DB_PASSWORD_FILE:-./grafana/secrets/local-postgres-password}"
 
 volumes:
   grafana-data:

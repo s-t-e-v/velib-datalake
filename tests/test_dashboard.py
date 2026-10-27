@@ -6,7 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD = ROOT / "dev/grafana/dashboards/velib-overview.json"
 COMPOSE = ROOT / "dev/dashboard.compose.yml"
+DEV_COMPOSE = ROOT / "dev/compose.yml"
 DATASOURCE = ROOT / "dev/grafana/provisioning/datasources/velib-postgres.yml"
+MAKEFILE = ROOT / "Makefile"
+PASSWORD_SCRIPT = ROOT / "scripts/dashboard-password.sh"
+TUNNEL_SCRIPT = ROOT / "scripts/dashboard-tunnel.sh"
 
 
 def test_dashboard_is_portable_and_covers_initial_presentation_views() -> None:
@@ -44,11 +48,22 @@ def test_dashboard_is_portable_and_covers_initial_presentation_views() -> None:
 
 def test_dashboard_container_is_local_only_pinned_and_credential_neutral() -> None:
     compose = COMPOSE.read_text(encoding="utf-8")
+    dev_compose = DEV_COMPOSE.read_text(encoding="utf-8")
     datasource = DATASOURCE.read_text(encoding="utf-8")
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    password_script = PASSWORD_SCRIPT.read_text(encoding="utf-8")
+    tunnel_script = TUNNEL_SCRIPT.read_text(encoding="utf-8")
 
     assert "grafana/grafana:13.2.4" in compose
     assert '"127.0.0.1:3000:3000"' in compose
+    assert '"127.0.0.1:5432:5432"' in dev_compose
     assert "GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION" in compose
-    assert "VELIB_GRAFANA_DB_PASSWORD" in compose
-    assert "password: $__env{VELIB_GRAFANA_DB_PASSWORD}" in datasource
+    assert "VELIB_GRAFANA_DB_PASSWORD:" not in compose
+    assert "velib_grafana_db_password" in compose
+    assert "password: $__file{/run/secrets/velib_grafana_db_password}" in datasource
     assert "velib-postgres" in datasource
+    assert "DASHBOARD_REMOTE_SECRET ?=" in makefile
+    assert "openssl rand -hex 32" in password_script
+    assert "chmod 604" in password_script
+    assert "docker network inspect bridge" in tunnel_script
+    assert '-L "$docker_gateway:15432:127.0.0.1:5432"' in tunnel_script
