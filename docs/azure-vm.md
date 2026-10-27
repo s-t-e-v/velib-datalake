@@ -136,7 +136,9 @@ The bootstrap contract is:
 - Configure `velib-collect.service` to execute `velib collect --process`, and its timer for every five UTC minutes with `Persistent=true`, `RandomizedDelaySec=15`, and `OnBootSec=30`.
 - Enable the timer and start collection immediately after migration.
 
-Initial installation and live collection were verified on 2026-10-25. Reboot recovery and subsequent scheduled invocations still require verification.
+Initial installation and live collection were verified on 2026-10-25. Continued scheduled
+collections and the SSH-tunnel dashboard were verified on 2026-10-27. Reboot recovery still
+requires verification.
 
 ## 4. Operate and inspect
 
@@ -152,7 +154,21 @@ sudo velib-admin indicator
 
 Inspect collector service failures in the journal; there is no deployed monitoring workspace or automatic alerting. If a request fails during bootstrap (for example while RBAC propagates), the timer is already enabled and retries later. Use `sudo systemctl start velib-collect.service` for an immediate retry. A missed timer window cannot recreate the historical API state. Persistent scheduling can trigger a catch-up invocation, not replay every missed five-minute snapshot.
 
-Raw data is saved **before** SQL processing, and each scheduled run processes only its current eligible collection. SQL failure leaves the raw collection available but does **not** trigger automatic backfill. To retry/rebuild from all eligible blobs:
+Raw data is saved **before** SQL processing, and each scheduled run processes only its current
+eligible collection. SQL failure leaves the raw collection available but does **not** trigger
+automatic backfill. Inspect and reconcile only missing collections in bounded chronological
+batches:
+
+```bash
+sudo velib-admin backlog
+sudo velib-admin reconcile --limit 100
+sudo velib-admin backlog
+```
+
+Reconciliation is manual so an operator can inspect the backlog and service logs before writing
+SQL. It is idempotent if another process loads one of the selected collections concurrently.
+
+For a deliberate full database rebuild from every eligible blob:
 
 ```bash
 sudo velib-admin migrate
@@ -160,7 +176,10 @@ sudo velib-admin process
 sudo velib-admin indicator
 ```
 
-Processing is idempotent through SQL upserts, but full replay lists/reads historical blobs and writes SQL again; time and transaction costs grow with the lake. If required, target one collection with `sudo velib-admin process --collection-id <COLLECTION_ID>`.
+Both backlog inspection and replay list raw metadata, but reconciliation downloads and transforms
+only missing bodies. Full replay downloads and writes every eligible collection, so its time and
+transaction costs grow with the lake. If required, target one collection with
+`sudo velib-admin process --collection-id <COLLECTION_ID>`.
 
 ### Recover an abandoned collection lock
 
@@ -216,6 +235,15 @@ az group delete --name <RESOURCE_GROUP>
 
 ## Validation boundary
 
-On 2026-10-25, Azure provisioning succeeded in France Central with the explicit override `vmSize=Standard_D2als_v7` (the original B-series candidates were unavailable). Application deployment through `make vm-deploy` then succeeded: PostgreSQL migration, managed-identity Blob writes, raw-first SQL loading, and indicator output were observed. The first collection had 1,519 source records; 48 of 1,349 eligible stations had zero bicycles. Authenticated Blob listing from the laptop confirmed both response and metadata files. The timer was active with its next invocation scheduled. No reboot, later timer invocation, database recovery, or full replay was tested. The current local parameters/template default may still name a B-series size: retain the `vmSize=Standard_D2als_v7` override when reviewing or repeating infrastructure deployment, and review its non-free compute price first.
+On 2026-10-25, Azure provisioning succeeded in France Central with the explicit override `vmSize=Standard_D2als_v7` (the original B-series candidates were unavailable). Application deployment through `make vm-deploy` then succeeded: PostgreSQL migration, managed-identity Blob writes, raw-first SQL loading, and indicator output were observed. The first collection had 1,519 source records; 48 of 1,349 eligible stations had zero bicycles. Authenticated Blob listing from the laptop confirmed both response and metadata files. The timer was active with its next invocation scheduled. At that time, no reboot, later timer invocation, database recovery, or full replay had been tested. The current local parameters/template default may still name a B-series size: retain the `vmSize=Standard_D2als_v7` override when reviewing or repeating infrastructure deployment, and review its non-free compute price first.
+
+On 2026-10-27, the database contained more than 500 timer-produced collections. Migration
+`002_presentation_views.sql` was applied, a dedicated read-only dashboard role was created, and
+Grafana connected through the Docker-gateway SSH tunnel. All 12 provisioned panel queries
+succeeded. Manual reconciliation was then deployed: `velib-admin backlog` reported 563 eligible
+raw collections and 563 processed collections, and `reconcile --limit 1` correctly performed no
+writes. This verifies continued scheduling, the private dashboard path, and zero-backlog
+inspection, but not a non-empty live reconciliation, reboot, database recovery, replacement-host
+recovery, or full replay.
 
 Local validation: Bicep compilation passed previously; shell syntax, lint, and 15 tests passed after adding deployment automation. One PostgreSQL integration test was skipped because `TEST_DATABASE_URL` was unset. Mocked script tests cover endpoint discovery, allowlisted upload, strict host-key checks, rejection of unexpected storage URLs, and stopping on SSH failure; they do not replace the live/recovery checks above.

@@ -81,8 +81,10 @@ def test_reprocessing_same_collection_does_not_duplicate_observations() -> None:
     )
     repository = PostgresRepository(database_url)
     try:
+        assert repository.processed_collection_ids([collection_id]) == set()
         repository.save_collection(metadata, transformed, freshness_minutes=45)
         repository.save_collection(metadata, transformed, freshness_minutes=45)
+        assert repository.processed_collection_ids([collection_id]) == {collection_id}
         with psycopg.connect(database_url) as connection:
             count = connection.execute(
                 "SELECT count(*) FROM station_observation WHERE collection_id = %s",

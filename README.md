@@ -4,7 +4,9 @@ This repository collects the official Vélib’ real-time availability export, p
 
 > Among stations open for rental with valid and sufficiently fresh observations, what proportion have zero available bicycles?
 
-The project deliberately stops there. It does not yet add station reference data, cycle infrastructure, spatial analysis, dashboards, managed PostgreSQL, or a general orchestration framework.
+The project deliberately stays focused. It adds a private workstation Grafana dashboard over a
+PostgreSQL presentation layer, but does not yet add station reference data, cycle infrastructure,
+spatial analysis, managed PostgreSQL, or a general orchestration framework.
 
 ## Architecture
 
@@ -110,7 +112,12 @@ The HTTP client has connect/read timeouts and bounded retries for 408, 429 and t
 
 The VM's systemd timer schedules collection every five UTC minutes, with `Persistent=true`, `RandomizedDelaySec=15`, and `OnBootSec=30`. systemd does not start another instance of the same service while it is active; the collector also uses a local file lock or Azure blob lease. Failed collection attempts remain visible through `velib collections`; service failures and SQL errors are inspected with `journalctl`. The history command reports inferred gaps between attempt timestamps, but an outage can leave no metadata. Persistent scheduling does not replay every missed snapshot. No monitoring workspace or managed alerting is deployed.
 
-`velib collect --process` saves raw data first and then loads only that collection into SQL. A SQL failure does not remove the raw collection, and later timer runs do **not** automatically backfill it. On the VM, `sudo velib-admin process` reprocesses all eligible blobs idempotently; its listing, reads, and SQL work grow with lake size.
+`velib collect --process` saves raw data first and then loads only that collection into SQL. A SQL
+failure does not remove the raw collection, and later timer runs do **not** automatically backfill
+it. `velib backlog` compares eligible raw commit markers with PostgreSQL, while
+`velib reconcile --limit N` processes only missing collections in chronological order. Automatic
+reconciliation is not enabled. On the VM, `sudo velib-admin process` remains the full rebuild
+command; its listing, reads, and SQL work grow with lake size.
 
 ## Local usage
 
@@ -129,6 +136,8 @@ docker compose -f dev/compose.yml up -d postgres
 uv run velib migrate
 uv run velib collect
 uv run velib collections
+uv run velib backlog
+uv run velib reconcile --limit 100
 uv run velib process
 uv run velib indicator
 ```
@@ -208,7 +217,13 @@ Live API checked:
 - paginated total count;
 - full-export count, duplicate station IDs, missing required fields and timestamp range.
 
-Verified on Azure on 2026-10-25: provisioning, SSH bootstrap, managed-identity Blob writes, authenticated laptop Blob listing, PostgreSQL migration/load, an active five-minute timer, and an indicator from the initial 1,519-row collection. Local validation: 15 tests passed, one database integration test skipped because `TEST_DATABASE_URL` was unset.
+Verified on Azure between 2026-10-25 and 2026-10-27: provisioning, SSH bootstrap,
+managed-identity Blob writes, authenticated laptop Blob listing, PostgreSQL migration/load,
+continued five-minute collections, and the presentation views over more than 500 processed
+collections. A local Grafana instance connected through an SSH tunnel with a read-only database
+role and executed all 12 dashboard queries. After deploying manual reconciliation, Blob contained
+563 eligible raw collections and PostgreSQL contained all 563; a bounded reconcile correctly
+performed no writes. Reboot, a non-empty live backlog, and full recovery remain unverified.
 
 Not yet verified:
 

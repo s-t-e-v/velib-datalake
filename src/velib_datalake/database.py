@@ -130,6 +130,20 @@ class PostgresRepository:
                     rows,
                 )
 
+    def processed_collection_ids(self, collection_ids: list[str]) -> set[str]:
+        if not collection_ids:
+            return set()
+        with psycopg.connect(self.database_url) as connection:
+            rows = connection.execute(
+                """
+                SELECT collection_id::text
+                FROM raw_collection
+                WHERE collection_id = ANY(%s::uuid[])
+                """,
+                (collection_ids,),
+            ).fetchall()
+        return {row[0] for row in rows}
+
     def indicator_input(
         self, collection_id: str | None = None
     ) -> tuple[str, datetime, int, int, list[Observation]]:

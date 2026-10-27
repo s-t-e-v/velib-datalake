@@ -146,19 +146,26 @@ collection before presenting it as current information.
 | Validation | Response and failure metadata | Next timer run tries a new snapshot |
 | Interrupted body upload | Possible orphan response, no commit marker | No automatic orphan cleanup |
 | Metadata upload | Response may be orphaned | Next timer run uses a new collection ID |
-| SQL transformation/load | Eligible raw collection remains in Blob | Manual targeted or full replay |
+| SQL transformation/load | Eligible raw collection remains in Blob | Manual bounded reconciliation, targeted replay, or full rebuild |
 | Process death while lease held | Journal and possibly partial raw state | Manual lease break after safety checks |
 | Missed schedule | Possibly inferable from adjacent metadata | Historical snapshot cannot be recreated |
 | PostgreSQL loss | Raw lake remains if Blob survives | Migrate and replay all eligible collections |
 
-Full replay is `velib process`; targeted replay uses `--collection-id`. Replay is idempotent but
-currently lists and rereads historical objects, so its time and transaction cost grow with the
-lake.
+`velib backlog` compares eligible raw metadata with processed SQL collection IDs. `velib reconcile
+--limit N` loads only missing collections, oldest first. Both operations currently list all raw
+metadata, but reconciliation downloads and transforms only the bounded missing bodies. Full replay
+is `velib process`; targeted replay uses `--collection-id`. All writes are idempotent through SQL
+upserts. Reconciliation remains a manual operator action rather than an automatic timer behavior.
+On 2026-10-27, the first live backlog inspection found 563 eligible raw collections and all 563 in
+PostgreSQL. A bounded live reconciliation therefore selected and wrote zero collections. The
+positive recovery path is covered locally, but has not yet been exercised against a real live
+backlog.
 
 ## Operational views available today
 
-There is no deployed dashboard or automatic alerting. PostgreSQL now exposes a SQL-serving view
-of health through `pipeline_health`, but operators still combine it with:
+There is no cloud-hosted dashboard or automatic alerting. A version-controlled Grafana instance
+can run on the operator workstation, and PostgreSQL exposes a SQL-serving view of health through
+`pipeline_health`, but operators still combine it with:
 
 - `systemctl status` and `systemctl list-timers` for scheduling state;
 - `journalctl` for collector and database service logs;
@@ -170,8 +177,9 @@ of health through `pipeline_health`, but operators still combine it with:
 `postgres_storage_usage` reports database/table sizes, while `pipeline_health` reports exact
 processed collection and persisted observation totals. These surfaces still answer different
 questions. In particular, PostgreSQL contains successfully processed collections, not every raw
-attempt or failure. Accordingly, the health view labels its scope `processed_sql_only` and cannot
-yet report the raw-to-SQL backlog or Blob capacity.
+attempt or failure. Accordingly, the health view labels its scope `processed_sql_only`. The CLI
+can calculate the raw-to-SQL backlog by joining Blob metadata with SQL IDs, but the SQL-only
+dashboard still cannot report that backlog or Blob capacity.
 
 A version-controlled Grafana dashboard can run on the operator's Linux workstation and consume
 these views from local PostgreSQL or through the existing SSH tunnel. It binds only to workstation
@@ -198,8 +206,8 @@ README, and `infra/vm/`. Bootstrap installs the Python package and virtual envir
 systemd units under `/etc/systemd/system`, and PostgreSQL files under `/var/lib/velib`. The
 temporary uploaded release is deleted after bootstrap.
 
-The initial live deployment verified provisioning, bootstrap, managed-identity Blob writes,
-PostgreSQL migration and loading, an active timer, authenticated Blob listing, and indicator
-calculation. Reboot recovery, later scheduled invocations, prolonged source failures, and a full
-cloud rebuild have not yet been demonstrated. See the [VM runbook](../azure-vm.md) for commands
-and the exact verification record.
+The live deployment verified provisioning, bootstrap, managed-identity Blob writes, PostgreSQL
+migration and loading, continued timer-driven collections, authenticated Blob listing, indicator
+calculation, and the presentation dashboard through an SSH tunnel. Reboot recovery, prolonged
+source failures, and a full cloud rebuild have not yet been demonstrated. See the
+[VM runbook](../azure-vm.md) for commands and the exact verification record.

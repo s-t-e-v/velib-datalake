@@ -12,6 +12,7 @@ from .config import ConfigurationError, Settings
 from .database import PostgresRepository, migrate
 from .http import ApiClient
 from .indicator import calculate_indicator
+from .models import CollectionMetadata
 from .storage import AzureBlobRawStore, LocalRawStore, RawStore
 from .transform import transform_export
 
@@ -66,6 +67,39 @@ def collection_history(items: list[Any], expected_interval_minutes: int = 5) -> 
     return {"attempts": attempts, "detected_gaps": gaps}
 
 
+def positive_integer(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be at least 1")
+    return parsed
+
+
+def reconciliation_backlog(
+    store: RawStore, repository: PostgresRepository
+) -> tuple[list[CollectionMetadata], int]:
+    eligible = [item for item in store.list_metadata() if item.eligible_for_processing]
+    processed = repository.processed_collection_ids([item.collection_id for item in eligible])
+    return [item for item in eligible if item.collection_id not in processed], len(processed)
+
+
+def backlog_report(
+    backlog: list[CollectionMetadata], *, eligible_count: int, processed_count: int
+) -> dict[str, Any]:
+    return {
+        "eligible_raw_count": eligible_count,
+        "processed_eligible_count": processed_count,
+        "backlog_count": len(backlog),
+        "backlog": [
+            {
+                "collection_id": item.collection_id,
+                "request_started_at": item.request_started_at,
+                "request_ended_at": item.request_ended_at,
+            }
+            for item in backlog
+        ],
+    }
+
+
 def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(prog="velib")
     commands = value.add_subparsers(dest="command", required=True)
@@ -78,6 +112,9 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("migrate", help="apply PostgreSQL migrations")
     process = commands.add_parser("process", help="reprocess eligible raw collections")
     process.add_argument("--collection-id")
+    commands.add_parser("backlog", help="list eligible raw collections missing from PostgreSQL")
+    reconcile = commands.add_parser("reconcile", help="process missing collections oldest first")
+    reconcile.add_argument("--limit", type=positive_integer, default=100)
     indicator = commands.add_parser("indicator", help="calculate the zero-bicycle indicator")
     indicator.add_argument("--collection-id")
     commands.add_parser("collections", help="list successful and failed collection metadata")
@@ -106,6 +143,43 @@ def main() -> None:
         print(json.dumps({"applied": applied}))
     elif args.command == "collections":
         print(json.dumps(collection_history(store.list_metadata()), indent=2))
+    elif args.command == "backlog":
+        repository = PostgresRepository(require_database_url(settings))
+        backlog, processed_count = reconciliation_backlog(store, repository)
+        print(
+            json.dumps(
+                backlog_report(
+                    backlog,
+                    eligible_count=processed_count + len(backlog),
+                    processed_count=processed_count,
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "reconcile":
+        repository = PostgresRepository(require_database_url(settings))
+        backlog, _processed_count = reconciliation_backlog(store, repository)
+        selected = backlog[: args.limit]
+        processed = []
+        for item in selected:
+            metadata, body = store.read(item.collection_id)
+            repository.save_collection(
+                metadata,
+                transform_export(body),
+                freshness_minutes=settings.freshness_minutes,
+            )
+            processed.append(item.collection_id)
+        print(
+            json.dumps(
+                {
+                    "backlog_before": len(backlog),
+                    "selected_count": len(selected),
+                    "processed": processed,
+                    "remaining_count": len(backlog) - len(processed),
+                },
+                indent=2,
+            )
+        )
     elif args.command == "process":
         repository = PostgresRepository(require_database_url(settings))
         if args.collection_id:

@@ -186,8 +186,8 @@ Outcome: one obvious architecture with less cognitive overhead.
 
 ### Step 2: Add a presentation and health SQL layer
 
-Status: implemented and verified locally against PostgreSQL 17 on 2026-10-27; not yet applied to
-or measured against the live Azure database.
+Status: implemented locally and applied to the live PostgreSQL 17 database on 2026-10-27. The
+live views reported more than 500 processed collections and a healthy latest collection.
 
 - Specify collection-age and health semantics.
 - Add tested SQL views for pipeline health, collection quality, historical indicator, and station
@@ -201,7 +201,9 @@ Outcome: stable contracts shared by dashboards and operational inspection.
 Status: implemented and verified locally on 2026-10-27. Grafana 13.2.4 started successfully,
 provisioned the PostgreSQL data source and dashboard, returned a healthy database connection, and
 executed all 12 panel queries successfully. A headless-browser check verified the rendered empty
-state. The live VM has not been changed, and the SSH-tunnel path still requires a live spike.
+state. The SSH-tunnel path was then verified against the live VM with a dedicated read-only role;
+all 12 queries succeeded against the accumulated dataset. The credential is delivered through a
+local Compose secret rather than a container environment variable.
 
 - Spike one Linux-compatible client against the SQL views.
 - Reuse the same views from Power BI on Windows.
@@ -212,10 +214,18 @@ Outcome: a showcase that is demonstrable on Linux without coupling the data mode
 
 ### Step 4: Reconcile missed processing
 
-- Expose raw-versus-processed backlog.
-- Add targeted chronological reconciliation.
-- Test failure between Blob commit and SQL commit.
-- Decide whether bounded automatic backfill is justified.
+Status: manual reconciliation implemented and deployed on 2026-10-27. Live inspection found 563
+eligible raw collections and all 563 already processed; bounded reconciliation correctly selected
+zero. The positive recovery path is tested locally but has not been exercised against a non-empty
+live backlog. Automatic backfill is not justified yet because there is no observed recurring
+backlog or measured failure pattern.
+
+- Expose raw-versus-processed backlog. Implemented by `velib backlog`.
+- Add targeted chronological reconciliation. Implemented by `velib reconcile --limit N`.
+- Test failure between Blob commit and SQL commit. Covered by a raw-retention and subsequent
+  reconciliation test.
+- Decide whether bounded automatic backfill is justified. Deferred until a recurring backlog or
+  operational failure pattern is observed.
 
 Outcome: SQL reliably converges toward the durable raw lake.
 
