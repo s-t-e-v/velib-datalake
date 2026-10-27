@@ -44,7 +44,7 @@ printf 'Deploying application to %s; raw storage: %s\n' "$target" "$url"
 echo 'SSH host must already be verified and trusted. No Azure resources will be provisioned.'
 # An allowlist prevents uploading local secrets, keys, or deployment parameter files.
 tar --exclude=__pycache__ --exclude='*.pyc' -czf "$work/app.tar.gz" -C "$root" \
-    src migrations pyproject.toml requirements.txt README.md infra/vm
+    src migrations pyproject.toml README.md infra/vm
 release=$(ssh "${ssh_options[@]}" "$target" 'mktemp -d /home/azureuser/velib-release.XXXXXXXX')
 if [[ ! $release =~ ^/home/azureuser/velib-release\.[a-zA-Z0-9]+$ ]]; then
     echo 'Unexpected release directory returned by VM.' >&2

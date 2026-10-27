@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -176,8 +175,4 @@ class AzureBlobRawStore:
             yield
         finally:
             lease.release()
-
-
-def metadata_as_json(metadata: CollectionMetadata) -> str:
-    return json.dumps(metadata.__dict__, ensure_ascii=False, sort_keys=True)
 

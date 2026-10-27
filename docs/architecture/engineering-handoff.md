@@ -154,48 +154,19 @@ Useful additions include:
   treatment of source anomalies;
 - tests covering new or unknown source fields and value variants.
 
-## Dead and legacy code inventory
+## Resolved review findings
 
-The active deployment is the VM stack referenced by `infra/main.bicep`. The following tracked
-artifacts belong to the earlier Azure Functions architecture and are not referenced by the active
-deployment:
+The 2026-10-27 cleanup removed the unused Azure Functions entry point, configuration, dependency,
+and infrastructure modules. It also removed the empty `azd` configuration, unused Python helpers,
+test-only repository method, and duplicate `requirements.txt` dependency declaration. The active
+deployment is now only the VM stack referenced by `infra/main.bicep`.
 
-- `function_app.py`
-- `host.json`
-- `local.settings.example.json`
-- `.funcignore`
-- `infra/modules/function-app.bicep`
-- `infra/modules/network.bicep`
-- `infra/modules/rbac.bicep`
-- `infra/modules/storage-private-endpoints.bicep`
-- the `azure-functions` project dependency and lock entry
+The same cleanup separated workstation deployment tooling, development Compose configuration,
+and VM runtime assets into explicit repository paths. Mocked deployment tests continue to verify
+the release allowlist and remote bootstrap flow.
 
-`azure.yaml` defines no services and only contains comments for an unsupported `azd` workflow. It
-is a removal candidate unless it provides a deliberate editor or discovery benefit.
+## Documentation maintenance
 
-Confirmed unused Python functions:
-
-- `collector.utc_now()`;
-- `storage.metadata_as_json()`.
-
-`PostgresRepository.observation_count()` is used only by the database integration test. It is
-not dead, but test-only convenience code should either be replaced with a test query or clearly
-kept as a supported repository operation.
-
-`requirements.txt` duplicates dependencies from `pyproject.toml`. Deployment copies it, but
-bootstrap installs the project from `pyproject.toml`; choose one dependency authority and update
-the archive/bootstrap accordingly.
-
-Remove legacy artifacts in a dedicated, tested cleanup change. First verify that no external
-deployment process still depends on them, then regenerate `uv.lock`, run unit/integration checks,
-compile the active Bicep templates, and test the deployment archive allowlist.
-
-## Documentation inconsistencies to clean up
-
-- `.env.example` still refers to a deployed Function App and says PostgreSQL is local-only,
-  although the VM collector also processes into PostgreSQL.
-- README examples use `raw/YYYY/...` as a general path, while Azure uses the `collections/`
-  prefix and local storage uses its configured root.
 - Deployment documentation repeats parts of the architecture and verification boundary. Keep the
   current-architecture document authoritative and let the runbook focus on commands.
 - Historical validation numbers are useful evidence but should be clearly dated and separated
@@ -205,10 +176,8 @@ compile the active Bicep templates, and test the deployment archive allowlist.
 
 ### Step 1: Clarify and simplify
 
-- Remove the confirmed Azure Functions path and unused helpers.
-- Correct stale configuration comments and dependency duplication.
-- Keep the unit suite green and run the PostgreSQL integration test.
-- Compile the active Bicep templates and retain the mocked deployment tests.
+Status: completed and verified on 2026-10-27. Unit, PostgreSQL integration, lint, shell syntax,
+mocked deployment, and active Bicep compilation checks passed.
 
 Outcome: one obvious architecture with less cognitive overhead.
 

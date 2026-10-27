@@ -54,7 +54,13 @@ def test_reprocessing_same_collection_does_not_duplicate_observations() -> None:
     try:
         repository.save_collection(metadata, transformed)
         repository.save_collection(metadata, transformed)
-        assert repository.observation_count(collection_id) == 1
+        with psycopg.connect(database_url) as connection:
+            count = connection.execute(
+                "SELECT count(*) FROM station_observation WHERE collection_id = %s",
+                (collection_id,),
+            ).fetchone()
+        assert count is not None
+        assert count[0] == 1
     finally:
         with psycopg.connect(database_url) as connection:
             connection.execute(

@@ -90,12 +90,15 @@ Official references:
 
 ## Raw preservation and failure semantics
 
-Every attempt gets a UUID. Successful files use this layout:
+Every attempt gets a UUID. Azure Blob objects use this layout:
 
 ```text
-raw/YYYY/MM/DD/<collection-id>/response.json
-raw/YYYY/MM/DD/<collection-id>/metadata.json
+collections/YYYY/MM/DD/<collection-id>/response.json
+collections/YYYY/MM/DD/<collection-id>/metadata.json
 ```
+
+Local development uses the configured raw directory followed by
+`YYYY/MM/DD/<collection-id>/...`.
 
 `response.json` is written first. `metadata.json` is written atomically and last, and is the commit marker. Its fields include the collection ID, URL and non-secret parameters, UTC request start/end, HTTP status, content type, record count, validation result, raw locations, and failure details. A collection is eligible only when its body was saved and validation is `passed` or `passed_with_warnings`.
 
@@ -182,7 +185,7 @@ Follow the [Azure VM runbook](docs/azure-vm.md). The supported workflow is **Azu
 - The Blob endpoint is publicly reachable, but `velib-raw` is private: OAuth access only, no anonymous or shared-key access. The VM's system-assigned managed identity and the deploying **user** receive Storage Blob Data Contributor.
 - No raw-data lifecycle deletion policy and no monitoring workspace are deployed.
 
-`function_app.py` and the old Function infrastructure modules remain unused legacy code; they are not the active deployment architecture. The first cloud deployment was verified on 2026-10-25 using `Standard_D2als_v7` in France Central; the default B-series size was unavailable. See the runbook for verification boundaries.
+The first cloud deployment was verified on 2026-10-25 using `Standard_D2als_v7` in France Central; the default B-series size was unavailable. See the runbook for verification boundaries.
 
 ## Verification status and limitations
 

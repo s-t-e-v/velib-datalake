@@ -102,7 +102,7 @@ Angle-bracket values below are placeholders to replace, not literal shell syntax
 - The NSG permits inbound TCP 22 only from `sshAllowedCidr` and denies other inbound traffic. If your public IP changes, update the local parameters and redeploy after reviewing what-if.
 - PostgreSQL is not exposed publicly; it binds to VM loopback only.
 - Blob's HTTPS endpoint is publicly reachable, **not** behind a private endpoint. Container `velib-raw` is private; anonymous and shared-key access are disabled. OAuth/RBAC grants Storage Blob Data Contributor to the VM's system-assigned managed identity and deploying user.
-- No Function App or monitoring workspace is used. `function_app.py` and old Function infrastructure modules are unused legacy artifacts.
+- No Function App or monitoring workspace is used.
 
 ## 3. Upload and bootstrap
 
@@ -121,7 +121,7 @@ For the equivalent manual steps:
 Build an explicit allowlisted archive from the repository root. Do not archive the whole checkout: that could upload `.env`, private keys, or local deployment files.
 
 ```bash
-tar -czf /tmp/velib-app.tar.gz src migrations pyproject.toml requirements.txt README.md infra/vm
+tar -czf /tmp/velib-app.tar.gz src migrations pyproject.toml README.md infra/vm
 scp -i ~/.ssh/velib-dev /tmp/velib-app.tar.gz azureuser@<VM_PUBLIC_IP>:~/velib-app.tar.gz
 ssh -i ~/.ssh/velib-dev azureuser@<VM_PUBLIC_IP>
 ```

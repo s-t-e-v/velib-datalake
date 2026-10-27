@@ -172,11 +172,3 @@ class PostgresRepository:
             observations,
         )
 
-    def observation_count(self, collection_id: str) -> int:
-        with psycopg.connect(self.database_url) as connection:
-            row = connection.execute(
-                "SELECT count(*) FROM station_observation WHERE collection_id = %s",
-                (collection_id,),
-            ).fetchone()
-        return int(row[0])
-

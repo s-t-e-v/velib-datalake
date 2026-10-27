@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
@@ -159,8 +159,4 @@ def collect_once(settings: Settings, store: RawStore, client: ApiClient) -> Coll
             metadata.validation_outcome,
         )
         return metadata
-
-
-def utc_now() -> datetime:
-    return datetime.now(UTC)
 

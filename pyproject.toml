@@ -9,7 +9,6 @@ description = "A focused Velib availability collection and processing slice"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
 dependencies = [
-  "azure-functions>=1.21,<2",
   "azure-identity>=1.19,<2",
   "azure-storage-blob>=12.24,<13",
   "psycopg[binary]>=3.2,<4",

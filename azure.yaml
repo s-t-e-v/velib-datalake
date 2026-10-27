@@ -1,8 +1,0 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
-name: velib-datalake
-# No azd services: deployment uses Azure CLI, not azd up or azd deploy.
-# From the repository root, replace the example CIDR and object ID with your own:
-# az deployment sub create --location francecentral --template-file infra/main.bicep --parameters @infra/main.parameters.json --parameters sshPublicKey=@/absolute/path/to/id_ed25519.pub deployerPrincipalId=<USER_OBJECT_ID> sshAllowedCidr=<CALLER_IPV4_CIDR>
-# Optional overrides: --parameters environmentName=dev location=francecentral vmSize=Standard_B2ats_v2
-# --location sets deployment metadata location; the location parameter sets resource location.
-# Application bootstrap is a separate step; the VM has no cloud-init app setup.

@@ -26,7 +26,7 @@ fi
 systemctl stop velib-collect.timer velib-collect.service 2>/dev/null || true
 install -d -m 755 /opt/velib /opt/velib/app /var/lib/velib
 install -d -m 700 /etc/velib
-cp -R src migrations pyproject.toml requirements.txt README.md /opt/velib/app/
+cp -R src migrations pyproject.toml README.md /opt/velib/app/
 chown -R root:root /opt/velib/app
 chmod -R go-w /opt/velib/app
 python3 -m venv /opt/velib/venv

@@ -7,7 +7,6 @@ __pycache__/
 htmlcov/
 dist/
 raw/
-local.settings.json
 *.local.parameters.json
 infra/main.json
 infra/modules/vm-stack.json
