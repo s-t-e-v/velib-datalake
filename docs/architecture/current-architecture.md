@@ -112,6 +112,12 @@ PostgreSQL data is stored under `/var/lib/velib/postgres` on the VM OS disk. It 
 replacement and ordinary reboots, but it is not independently backed up and is deleted with the
 OS disk. The database can be rebuilt by migrating and replaying eligible Blob collections.
 
+Migration `002_presentation_views.sql` adds normal SQL views for pipeline health, collection
+quality, indicator history, latest station status, station history, and PostgreSQL storage usage.
+The station freshness threshold used during processing is stored with each collection so
+historical presentation preserves the rule that was active at that time. See the
+[presentation layer](../presentation-layer.md) for the view contract and freshness semantics.
+
 ## Validation and indicator semantics
 
 A collection fails as a whole when the top-level structure is wrong, its record count is below
@@ -151,7 +157,8 @@ lake.
 
 ## Operational views available today
 
-There is no unified operational dashboard. Operators currently combine:
+There is no deployed dashboard or automatic alerting. PostgreSQL now exposes a SQL-serving view
+of health through `pipeline_health`, but operators still combine it with:
 
 - `systemctl status` and `systemctl list-timers` for scheduling state;
 - `journalctl` for collector and database service logs;
@@ -160,8 +167,11 @@ There is no unified operational dashboard. Operators currently combine:
 - Azure CLI for Blob contents and infrastructure state;
 - an SSH tunnel and SQL client for PostgreSQL inspection.
 
-These surfaces answer different questions. In particular, PostgreSQL contains successfully
-processed collections, not every raw attempt or failure.
+`postgres_storage_usage` reports database/table sizes, while `pipeline_health` reports exact
+processed collection and persisted observation totals. These surfaces still answer different
+questions. In particular, PostgreSQL contains successfully processed collections, not every raw
+attempt or failure. Accordingly, the health view labels its scope `processed_sql_only` and cannot
+yet report the raw-to-SQL backlog or Blob capacity.
 
 ## Deployment and verification boundary
 

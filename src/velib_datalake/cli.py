@@ -96,7 +96,11 @@ def main() -> None:
         if args.process:
             repository = PostgresRepository(require_database_url(settings))
             metadata, body = store.read(metadata.collection_id)
-            repository.save_collection(metadata, transform_export(body))
+            repository.save_collection(
+                metadata,
+                transform_export(body),
+                freshness_minutes=settings.freshness_minutes,
+            )
     elif args.command == "migrate":
         applied = migrate(require_database_url(settings))
         print(json.dumps({"applied": applied}))
@@ -113,7 +117,11 @@ def main() -> None:
         processed = []
         for collection_id in identifiers:
             metadata, body = store.read(collection_id)
-            repository.save_collection(metadata, transform_export(body))
+            repository.save_collection(
+                metadata,
+                transform_export(body),
+                freshness_minutes=settings.freshness_minutes,
+            )
             processed.append(collection_id)
         print(json.dumps({"processed": processed, "count": len(processed)}))
     elif args.command == "indicator":

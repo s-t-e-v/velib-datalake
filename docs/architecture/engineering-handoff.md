@@ -30,10 +30,11 @@ state visible before expanding the number of data sources or infrastructure comp
 
 ### P0: Prevent misleading presentation
 
-The indicator checks source timestamps relative to the collection timestamp, but the default
-command selects the latest processed collection without checking how old that collection is
-relative to now. If collection stops, an old result can remain internally valid and appear
-current.
+The SQL presentation layer now compares the latest processed collection with the current time.
+It marks results stale after 15 minutes and suppresses the current KPI for stale, missing, or
+future-dated data. The CLI's default `indicator` command still selects the latest processed
+collection without applying this current-time guard, so consumers must use `pipeline_health` for
+a current presentation until the CLI contract is updated.
 
 Suggested response:
 
@@ -61,8 +62,10 @@ Minimum useful health signals:
 - Blob object count and storage size;
 - service/timer failures and current lease state.
 
-Prefer producing these as application/SQL health views first. A monitoring product can consume
-them later.
+The first SQL health view now exposes processed collection age, status, current KPI, and exact
+processed collection/observation totals. It explicitly cannot see raw failures, backlog, Blob
+usage, service state, or lease state. A later application health/reconciliation layer must add
+those signals before a monitoring product can answer the complete question.
 
 ### P1: Close the raw-to-SQL recovery gap
 
@@ -89,22 +92,22 @@ Investigate a finite renewable lease or another lock with expiry. Any change mus
 two collectors from committing overlapping runs and must be tested for process termination,
 slow requests, and temporary Azure errors.
 
-### P1: Create a dashboard-neutral presentation contract
+### Implemented foundation: Dashboard-neutral presentation contract
 
-There is no application layer yet. The CLI returns one indicator as JSON, while BI clients would
-otherwise need to understand raw tables and validation rules independently.
+Migration `002_presentation_views.sql` now provides PostgreSQL views as the stable
+software-agnostic boundary:
 
-Use PostgreSQL views as the stable software-agnostic boundary. Candidate views are:
-
-- `pipeline_health`: stage timestamps, ages, status, and backlog;
+- `pipeline_health`: latest processed timestamp, age, status, guarded KPI, and SQL totals;
 - `collection_quality`: counts and quality measures per collection;
 - `zero_bicycle_indicator_history`: the agreed business rule over time;
-- `latest_station_status`: one current row per station, including data-age status;
+- `latest_station_status`: one row per station from the latest processed collection;
 - `station_availability_history`: BI-friendly observation history.
 
-Power BI on Windows and a Linux-friendly tool such as Metabase, Superset, or Grafana can then use
-the same definitions. Tool selection should follow a small connection and visualization spike,
-not drive the data model.
+It also provides `postgres_storage_usage` for database/table sizes and estimated table rows. These
+are normal views; query cost should be measured as history grows. Power BI on Windows and a
+Linux-friendly tool such as Metabase, Superset, or Grafana can use the same definitions. Tool
+selection should still follow a small connection and visualization spike rather than drive the
+data model.
 
 ### P1: Add geography before building a map
 
@@ -183,6 +186,9 @@ Outcome: one obvious architecture with less cognitive overhead.
 
 ### Step 2: Add a presentation and health SQL layer
 
+Status: implemented and verified locally against PostgreSQL 17 on 2026-10-27; not yet applied to
+or measured against the live Azure database.
+
 - Specify collection-age and health semantics.
 - Add tested SQL views for pipeline health, collection quality, historical indicator, and station
   observations.
@@ -229,9 +235,9 @@ Outcome: richer analysis built on an observable and recoverable foundation.
 
 ## Decisions still needed
 
-- What age makes a collection too stale for presentation?
+- Should the initial 15-minute maximum collection age change after observing real scheduling
+  behavior?
 - Which operational metrics must trigger an alert versus only appear on a dashboard?
-- Should indicator history be a normal view, materialized view, or stored aggregate?
 - How should station replacement or station-code reuse be represented?
 - How much raw history should be retained hot, cool, or outside the resource group?
 - Is PostgreSQL on the VM sufficient for the final showcase, or is independent durability a goal?

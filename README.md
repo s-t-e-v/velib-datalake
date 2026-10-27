@@ -33,6 +33,7 @@ Architecture documentation:
 - [ADR 0001: initial vertical slice](docs/architecture/0001-initial-vertical-slice.md) preserves the original design and the hypotheses it introduced.
 - [Current architecture](docs/architecture/current-architecture.md) describes the implemented runtime, data flow, storage, and failure semantics.
 - [Engineering handoff](docs/architecture/engineering-handoff.md) records weaknesses, legacy code, improvement options, and a suggested delivery sequence.
+- [PostgreSQL presentation layer](docs/presentation-layer.md) defines the health, quality, indicator, station, and storage-usage views intended for dashboards.
 
 ## Source exploration
 

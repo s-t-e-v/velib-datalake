@@ -42,8 +42,14 @@ class PostgresRepository:
         self.database_url = database_url
 
     def save_collection(
-        self, metadata: CollectionMetadata, transformed: TransformResult
+        self,
+        metadata: CollectionMetadata,
+        transformed: TransformResult,
+        *,
+        freshness_minutes: int,
     ) -> None:
+        if freshness_minutes < 1:
+            raise ValueError("Freshness minutes must be positive")
         if not metadata.data_location or not metadata.metadata_location:
             raise ValueError("Raw locations are required before processing")
         with psycopg.connect(self.database_url) as connection:
@@ -53,12 +59,13 @@ class PostgresRepository:
                     collection_id, source_url, source_parameters, request_started_at,
                     request_ended_at, raw_data_location, raw_metadata_location,
                     source_record_count, missing_stationcode_count, validation_outcome,
-                    processed_at
+                    freshness_minutes, processed_at
                 ) VALUES (
                     %(collection_id)s, %(source_url)s, %(source_parameters)s::jsonb,
                     %(request_started_at)s, %(request_ended_at)s, %(raw_data_location)s,
                     %(raw_metadata_location)s, %(source_record_count)s,
-                    %(missing_stationcode_count)s, %(validation_outcome)s, now()
+                    %(missing_stationcode_count)s, %(validation_outcome)s,
+                    %(freshness_minutes)s, now()
                 )
                 ON CONFLICT (collection_id) DO UPDATE SET
                     source_url = EXCLUDED.source_url,
@@ -70,6 +77,7 @@ class PostgresRepository:
                     source_record_count = EXCLUDED.source_record_count,
                     missing_stationcode_count = EXCLUDED.missing_stationcode_count,
                     validation_outcome = EXCLUDED.validation_outcome,
+                    freshness_minutes = EXCLUDED.freshness_minutes,
                     processed_at = now()
                 """,
                 {
@@ -83,6 +91,7 @@ class PostgresRepository:
                     "source_record_count": transformed.source_record_count,
                     "missing_stationcode_count": transformed.missing_stationcode_count,
                     "validation_outcome": metadata.validation_outcome,
+                    "freshness_minutes": freshness_minutes,
                 },
             )
             rows = []

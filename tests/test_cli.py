@@ -63,7 +63,7 @@ def test_collect_processes_only_current_saved_snapshot(
         events.append("raw_saved")
         return saved
 
-    repository.save_collection.side_effect = lambda *_args: events.append("sql_saved")
+    repository.save_collection.side_effect = lambda *_args, **_kwargs: events.append("sql_saved")
     monkeypatch.setattr("sys.argv", ["velib", "collect"] + (["--process"] if process else []))
     monkeypatch.setattr(cli.Settings, "from_env", lambda: settings)
     monkeypatch.setattr(cli, "build_store", lambda _settings: store)
