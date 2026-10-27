@@ -173,6 +173,10 @@ questions. In particular, PostgreSQL contains successfully processed collections
 attempt or failure. Accordingly, the health view labels its scope `processed_sql_only` and cannot
 yet report the raw-to-SQL backlog or Blob capacity.
 
+A version-controlled Grafana dashboard can run on the operator's Linux workstation and consume
+these views from local PostgreSQL or through the existing SSH tunnel. It binds only to workstation
+loopback and is not deployed on the VM. See the [dashboard runbook](../dashboard.md).
+
 ## Deployment and verification boundary
 
 Infrastructure is deployed explicitly with Azure CLI and Bicep. Application code is uploaded

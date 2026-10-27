@@ -1,0 +1,26 @@
+apiVersion: 1
+
+deleteDatasources:
+  - name: Velib PostgreSQL
+    orgId: 1
+
+datasources:
+  - name: Velib PostgreSQL
+    uid: velib-postgres
+    type: postgres
+    access: proxy
+    url: $__env{VELIB_GRAFANA_DB_HOST}:$__env{VELIB_GRAFANA_DB_PORT}
+    user: $__env{VELIB_GRAFANA_DB_USER}
+    isDefault: true
+    editable: false
+    jsonData:
+      database: $__env{VELIB_GRAFANA_DB_NAME}
+      sslmode: $__env{VELIB_GRAFANA_DB_SSL_MODE}
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1700
+      timescaledb: false
+      timeInterval: 5m
+    secureJsonData:
+      password: $__env{VELIB_GRAFANA_DB_PASSWORD}

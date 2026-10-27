@@ -198,6 +198,11 @@ Outcome: stable contracts shared by dashboards and operational inspection.
 
 ### Step 3: Build a portable dashboard
 
+Status: implemented and verified locally on 2026-10-27. Grafana 13.2.4 started successfully,
+provisioned the PostgreSQL data source and dashboard, returned a healthy database connection, and
+executed all 12 panel queries successfully. A headless-browser check verified the rendered empty
+state. The live VM has not been changed, and the SSH-tunnel path still requires a live spike.
+
 - Spike one Linux-compatible client against the SQL views.
 - Reuse the same views from Power BI on Windows.
 - Start with pipeline health, latest KPI, KPI history, and quality/exclusion trends.

@@ -34,6 +34,7 @@ Architecture documentation:
 - [Current architecture](docs/architecture/current-architecture.md) describes the implemented runtime, data flow, storage, and failure semantics.
 - [Engineering handoff](docs/architecture/engineering-handoff.md) records weaknesses, legacy code, improvement options, and a suggested delivery sequence.
 - [PostgreSQL presentation layer](docs/presentation-layer.md) defines the health, quality, indicator, station, and storage-usage views intended for dashboards.
+- [Portable Grafana dashboard](docs/dashboard.md) explains the local dashboard and private SSH-tunnel connection to the VM database.
 
 ## Source exploration
 

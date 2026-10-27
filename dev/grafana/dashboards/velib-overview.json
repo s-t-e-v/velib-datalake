@@ -1,0 +1,284 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Pipeline health, current zero-bicycle KPI, history, and data quality for the Velib datalake.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {"color": "green", "index": 0, "text": "HEALTHY"},
+                "1": {"color": "red", "index": 1, "text": "STALE"},
+                "2": {"color": "gray", "index": 2, "text": "NO DATA"},
+                "3": {"color": "orange", "index": 3, "text": "CLOCK SKEW"}
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "value"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CASE health_status WHEN 'healthy' THEN 0 WHEN 'stale' THEN 1 WHEN 'no_data' THEN 2 ELSE 3 END AS \"Health\" FROM pipeline_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Pipeline health",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "noValue": "Unavailable",
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 5, "x": 4, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT current_proportion_zero_bicycles * 100 AS \"Zero-bicycle stations\" FROM pipeline_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Current zero-bicycle proportion",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "noValue": "Unavailable",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 600}, {"color": "red", "value": 900}]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 5, "x": 9, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT latest_processed_collection_age_seconds AS \"Latest collection age\" FROM pipeline_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest processed collection age",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 0, "noValue": "Unavailable", "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 14, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "none", "graphMode": "area", "justifyMode": "center", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT processed_collection_count AS \"Processed collections\" FROM pipeline_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Processed collections",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 5, "x": 19, "y": 0},
+      "id": 5,
+      "options": {"colorMode": "none", "graphMode": "area", "justifyMode": "center", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT persisted_observation_count AS \"Station observations\" FROM pipeline_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Persisted observations",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 2, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "id": 6,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "single", "sort": "none"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT collected_at AS \"time\", proportion_zero_bicycles * 100 AS \"Zero-bicycle proportion\" FROM zero_bicycle_indicator_history WHERE $__timeFilter(collected_at) ORDER BY collected_at",
+          "refId": "A"
+        }
+      ],
+      "title": "Zero-bicycle indicator history",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "id": 7,
+      "options": {
+        "legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT collected_at AS \"time\", excluded_invalid_or_missing AS \"Invalid or missing\", excluded_not_open_for_rental AS \"Not open\", excluded_stale AS \"Stale source\" FROM collection_quality WHERE $__timeFilter(collected_at) ORDER BY collected_at",
+          "refId": "A"
+        }
+      ],
+      "title": "Collection exclusions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+      "id": 8,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT collected_at AS \"time\", average_source_lag_seconds AS \"Average source lag\", p95_source_lag_seconds AS \"P95 source lag\" FROM collection_quality WHERE $__timeFilter(collected_at) ORDER BY collected_at",
+          "refId": "A"
+        }
+      ],
+      "title": "Source observation lag",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+      "id": 9,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT stationcode AS \"Station code\", name AS \"Station\", numbikesavailable AS \"Bicycles\", numdocksavailable AS \"Docks\", indicator_classification AS \"Classification\", source_observed_at AS \"Source time\" FROM latest_station_status ORDER BY CASE indicator_classification WHEN 'eligible_zero_bicycles' THEN 0 WHEN 'stale' THEN 1 WHEN 'invalid' THEN 2 ELSE 3 END, name LIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest station status (first 100 requiring attention)",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 1, "unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 21},
+      "id": 10,
+      "options": {"colorMode": "none", "graphMode": "none", "justifyMode": "center", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT database_size_bytes AS \"PostgreSQL database size\" FROM postgres_storage_usage",
+          "refId": "A"
+        }
+      ],
+      "title": "PostgreSQL database size",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 1, "unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 9, "x": 6, "y": 21},
+      "id": 11,
+      "options": {"colorMode": "none", "graphMode": "none", "justifyMode": "center", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT station_observation_total_bytes AS \"Station table and indexes\" FROM postgres_storage_usage",
+          "refId": "A"
+        }
+      ],
+      "title": "Station observation storage",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+      "fieldConfig": {"defaults": {"decimals": 0, "noValue": "Unavailable", "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 9, "x": 15, "y": 21},
+      "id": 12,
+      "options": {"colorMode": "none", "graphMode": "none", "justifyMode": "center", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-postgresql-datasource", "uid": "velib-postgres"},
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT latest_source_record_count AS \"Latest source records\" FROM pipeline_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest source record count",
+      "type": "stat"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 41,
+  "tags": ["velib", "datalake", "postgresql"],
+  "templating": {"list": []},
+  "time": {"from": "now-24h", "to": "now"},
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Velib pipeline and availability",
+  "uid": "velib-overview",
+  "version": 1,
+  "weekStart": "monday"
+}

@@ -5,9 +5,23 @@ SSH_KEY ?= $(HOME)/.ssh/velib-dev
 
 .PHONY: install dev-up dev-down dev-migrate dev-collect dev-process dev-indicator
 .PHONY: test test-integration check dev-e2e vm-deploy
+.PHONY: dashboard-up dashboard-remote-up dashboard-down dashboard-logs
 
 vm-deploy:
 	bash scripts/deploy-app.sh "$(VM_DEPLOYMENT)" "$(SSH_KEY)"
+
+dashboard-up: dev-up
+	DATABASE_URL=$(DATABASE_URL) uv run velib migrate
+	docker compose -f dev/dashboard.compose.yml up -d --wait
+
+dashboard-remote-up:
+	docker compose -f dev/dashboard.compose.yml up -d --wait
+
+dashboard-down:
+	docker compose -f dev/dashboard.compose.yml down
+
+dashboard-logs:
+	docker compose -f dev/dashboard.compose.yml logs -f grafana
 
 install:
 	uv sync --extra dev
