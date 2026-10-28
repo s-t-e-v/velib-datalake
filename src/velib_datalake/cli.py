@@ -203,6 +203,9 @@ def main() -> None:
         print(json.dumps({"processed": processed, "count": len(processed)}))
     elif args.command == "indicator":
         repository = PostgresRepository(require_database_url(settings))
+        if args.collection_id is None:
+            print(json.dumps(repository.current_indicator(), indent=2))
+            return
         collection_id, collected_at, source_count, missing_count, observations = (
             repository.indicator_input(args.collection_id)
         )

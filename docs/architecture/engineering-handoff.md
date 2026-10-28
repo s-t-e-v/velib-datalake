@@ -28,20 +28,14 @@ state visible before expanding the number of data sources or infrastructure comp
 
 ## Confirmed weaknesses and risks
 
-### P0: Prevent misleading presentation
+### Resolved: Prevent misleading presentation
 
 The SQL presentation layer now compares the latest processed collection with the current time.
 It marks results stale after 15 minutes and suppresses the current KPI for stale, missing, or
-future-dated data. The CLI's default `indicator` command still selects the latest processed
-collection without applying this current-time guard, so consumers must use `pipeline_health` for
-a current presentation until the CLI contract is updated.
-
-Suggested response:
-
-- expose the latest attempt, raw success, SQL success, and their ages;
-- define an explicit maximum acceptable collection age;
-- make dashboards show a visible stale-data state instead of only the last value;
-- include the collection timestamp and age in every presentation query.
+future-dated data. The CLI's default `indicator` command now reads that guarded contract and
+includes collection age and health status. Explicit `--collection-id` requests remain unguarded
+historical calculations. Raw-attempt and end-to-end health signals remain part of the separate
+observability gap below.
 
 ### P0: Make pipeline state observable
 

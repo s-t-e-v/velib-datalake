@@ -20,6 +20,10 @@ Two different ages must not be confused:
 `clock_skew`. A dashboard should use this guarded value for a current KPI, not the last historical
 proportion without its health status.
 
+The default `velib indicator` command reads this guarded contract and exposes the same health
+status, age, and nullable current proportion. `velib indicator --collection-id <uuid>` remains an
+unguarded historical calculation for investigation and replay verification.
+
 The health scope is deliberately labeled `processed_sql_only`. PostgreSQL cannot see failed raw
 attempts that exist only in Blob metadata or journald, nor can it calculate the Blob-to-SQL
 backlog. Those signals still require a later reconciliation/observability step.

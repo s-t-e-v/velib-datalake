@@ -144,6 +144,39 @@ class PostgresRepository:
             ).fetchall()
         return {row[0] for row in rows}
 
+    def current_indicator(self) -> dict[str, object]:
+        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    latest_processed_collection_id::text AS collection_id,
+                    latest_processed_collection_at AS collected_at,
+                    latest_processed_collection_age_seconds AS collection_age_seconds,
+                    EXTRACT(EPOCH FROM maximum_acceptable_collection_age)::double precision
+                        AS maximum_acceptable_collection_age_seconds,
+                    health_status,
+                    is_healthy,
+                    latest_source_record_count AS source_record_count,
+                    latest_excluded_invalid_or_missing AS excluded_invalid_or_missing,
+                    latest_excluded_not_open_for_rental AS excluded_not_open_for_rental,
+                    latest_excluded_stale AS excluded_stale,
+                    numerator_zero_bicycles,
+                    denominator_open_valid_fresh,
+                    current_proportion_zero_bicycles AS proportion,
+                    processed_collection_count,
+                    persisted_observation_count::bigint AS persisted_observation_count,
+                    health_scope
+                FROM pipeline_health
+                """
+            ).fetchone()
+        if row is None:
+            raise LookupError("Pipeline health view returned no row")
+        result = dict(row)
+        collected_at = result["collected_at"]
+        if isinstance(collected_at, datetime):
+            result["collected_at"] = collected_at.isoformat()
+        return result
+
     def indicator_input(
         self, collection_id: str | None = None
     ) -> tuple[str, datetime, int, int, list[Observation]]:

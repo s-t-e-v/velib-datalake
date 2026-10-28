@@ -71,8 +71,9 @@ One scheduled execution follows this sequence:
    and records eligibility, timing, validation, locations, HTTP status, and failure information.
 8. For a successful collection, `--process` reads that collection from Blob, transforms it, and
    upserts it into PostgreSQL in a transaction.
-9. The process exits. A later `velib indicator` command reads the latest processed collection by
-   default and returns the indicator as JSON.
+9. The process exits. A later `velib indicator` command reads the guarded current result from
+   `pipeline_health` and returns its age, health status, and nullable indicator as JSON. An explicit
+   `--collection-id` instead calculates the historical result without a current-time guard.
 
 systemd prevents overlapping starts of the same one-shot service. The Blob lease provides an
 additional cross-process or cross-host exclusion mechanism.
@@ -173,7 +174,7 @@ can run on the operator workstation, and PostgreSQL exposes a SQL-serving view o
 - `systemctl status` and `systemctl list-timers` for scheduling state;
 - `journalctl` for collector and database service logs;
 - `velib collections` for raw attempt metadata and inferred schedule gaps;
-- `velib indicator` for the latest processed business result;
+- `velib indicator` for the health-guarded current business result;
 - Azure CLI for Blob contents and infrastructure state;
 - an SSH tunnel and SQL client for PostgreSQL inspection.
 

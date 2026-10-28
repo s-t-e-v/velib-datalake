@@ -175,3 +175,59 @@ def test_reconcile_processes_only_missing_collections_up_to_limit(
     store.read.assert_called_once_with("first")
     repository.save_collection.assert_called_once()
 
+
+def test_default_indicator_uses_guarded_pipeline_health(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = replace(settings, database_url="postgresql://example.test/velib")
+    repository = Mock()
+    repository.current_indicator.return_value = {
+        "collection_id": "latest",
+        "collected_at": "2026-10-28T12:00:00+00:00",
+        "collection_age_seconds": 1200.0,
+        "maximum_acceptable_collection_age_seconds": 900.0,
+        "health_status": "stale",
+        "is_healthy": False,
+        "proportion": None,
+    }
+    monkeypatch.setattr("sys.argv", ["velib", "indicator"])
+    monkeypatch.setattr(cli.Settings, "from_env", lambda: settings)
+    monkeypatch.setattr(cli, "build_store", lambda _settings: Mock())
+    monkeypatch.setattr(cli, "PostgresRepository", lambda _url: repository)
+
+    cli.main()
+
+    assert json.loads(capsys.readouterr().out) == repository.current_indicator.return_value
+    repository.current_indicator.assert_called_once_with()
+    repository.indicator_input.assert_not_called()
+
+
+def test_targeted_indicator_remains_a_historical_calculation(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = replace(settings, database_url="postgresql://example.test/velib")
+    repository = Mock()
+    repository.indicator_input.return_value = (
+        "historical",
+        datetime(2026, 10, 1, 12, 0, tzinfo=UTC),
+        0,
+        0,
+        [],
+    )
+    monkeypatch.setattr("sys.argv", ["velib", "indicator", "--collection-id", "historical"])
+    monkeypatch.setattr(cli.Settings, "from_env", lambda: settings)
+    monkeypatch.setattr(cli, "build_store", lambda _settings: Mock())
+    monkeypatch.setattr(cli, "PostgresRepository", lambda _url: repository)
+
+    cli.main()
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["collection_id"] == "historical"
+    assert result["proportion"] is None
+    repository.indicator_input.assert_called_once_with("historical")
+    repository.current_indicator.assert_not_called()
+

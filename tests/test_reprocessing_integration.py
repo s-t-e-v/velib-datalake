@@ -142,6 +142,13 @@ def test_reprocessing_same_collection_does_not_duplicate_observations() -> None:
         assert health is not None
         assert str(health[0]) == collection_id
         assert health[1:] == ("healthy", True, 1, 5, 0.5, "processed_sql_only")
+        current_indicator = repository.current_indicator()
+        assert current_indicator["collection_id"] == collection_id
+        assert current_indicator["health_status"] == "healthy"
+        assert current_indicator["is_healthy"] is True
+        assert current_indicator["proportion"] == 0.5
+        assert current_indicator["maximum_acceptable_collection_age_seconds"] == 900.0
+        assert isinstance(current_indicator["collected_at"], str)
 
         with psycopg.connect(database_url) as connection:
             connection.execute(
@@ -160,6 +167,10 @@ def test_reprocessing_same_collection_does_not_duplicate_observations() -> None:
                 """
             ).fetchone()
         assert stale_health == ("stale", False, None)
+        stale_indicator = repository.current_indicator()
+        assert stale_indicator["health_status"] == "stale"
+        assert stale_indicator["is_healthy"] is False
+        assert stale_indicator["proportion"] is None
     finally:
         with psycopg.connect(database_url) as connection:
             connection.execute(

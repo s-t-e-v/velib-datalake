@@ -143,6 +143,11 @@ uv run velib process
 uv run velib indicator
 ```
 
+The default `indicator` output is a current presentation result backed by `pipeline_health`. It
+includes collection age and health status, and its `proportion` is `null` when the latest processed
+collection is missing, more than 15 minutes old, or more than five minutes in the future. Use an
+explicit collection ID for an unguarded historical calculation.
+
 Equivalent end-to-end convenience command:
 
 ```bash
@@ -150,7 +155,8 @@ make install
 make dev-e2e
 ```
 
-Reprocess one raw collection without duplicating observations:
+Reprocess one raw collection without duplicating observations, or inspect its historical
+indicator:
 
 ```bash
 uv run velib process --collection-id <uuid>
