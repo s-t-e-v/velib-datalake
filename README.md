@@ -124,6 +124,7 @@ command; its listing, reads, and SQL work grow with lake size.
 Prerequisites: Python 3.12–3.14, `uv`, and Docker with Compose.
 
 The common commands are also available through the root `Makefile`; they intentionally rely on normal Docker group access and do not invoke `sudo`.
+Run `make` without a target to display the safe command summary.
 
 ```bash
 cp .env.example .env

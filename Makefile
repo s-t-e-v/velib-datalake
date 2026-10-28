@@ -1,12 +1,37 @@
 DATABASE_URL ?= postgresql://velib:velib@localhost:5432/velib
+.DEFAULT_GOAL := help
 
 VM_DEPLOYMENT ?= velib-dev
 SSH_KEY ?= $(HOME)/.ssh/velib-dev
 DASHBOARD_REMOTE_SECRET ?= $(CURDIR)/.secrets/velib-dashboard-password
 
-.PHONY: install dev-up dev-down dev-migrate dev-collect dev-process dev-indicator
+.PHONY: help install dev-up dev-down dev-migrate dev-collect dev-process dev-indicator
 .PHONY: test test-integration check dev-e2e vm-deploy
 .PHONY: dashboard-up dashboard-remote-up dashboard-down dashboard-logs
+.PHONY: ssh-location
+
+SSH_LOCATION_ARGS ?=
+
+help:
+	@printf '%s\n' \
+		'Development:' \
+		'  make install           Install Python dependencies' \
+		'  make dev-e2e           Start PostgreSQL and run the local pipeline' \
+		'  make test              Run tests' \
+		'  make test-integration  Run tests with PostgreSQL' \
+		'  make check             Run lint checks' \
+		'' \
+		'Operations:' \
+		'  make ssh-location      Select and activate an SSH source location' \
+		'  make vm-deploy         Deploy the application to the existing VM' \
+		'' \
+		'Dashboard:' \
+		'  make dashboard-up      Start Grafana against local PostgreSQL' \
+		'  make dashboard-remote-up  Start Grafana for an existing SSH tunnel' \
+		'  make dashboard-down    Stop Grafana'
+
+ssh-location:
+	python3 scripts/ssh_location.py $(SSH_LOCATION_ARGS)
 
 vm-deploy:
 	bash scripts/deploy-app.sh "$(VM_DEPLOYMENT)" "$(SSH_KEY)"

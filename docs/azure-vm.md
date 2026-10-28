@@ -52,56 +52,60 @@ Do not commit the local file. Use `infra/dev.local.parameters.json`, not `infra/
 
 ### Switch between trusted SSH locations
 
-`infra/dev.local.parameters.json` contains the default `sshAllowedCidr`, but operators who move
-between known locations can keep named CIDRs in a separate untracked file. Create it from the
-tracked example and use meaningful variable names if `PRIMARY` and `SECONDARY` are unclear:
+Use the repository CLI from the repository root. With no arguments it creates the ignored
+`infra/ssh-locations.local.json` registry if needed and presents an interactive menu:
 
 ```bash
-cp infra/ssh-locations.local.env.example infra/ssh-locations.local.env
-curl -4 https://api.ipify.org
+make ssh-location
 ```
 
-Edit `infra/ssh-locations.local.env`, store each public outbound IPv4 address with a `/32` suffix,
-and confirm Git ignores it:
+The menu can retrieve the current public IPv4 only after the operator selects that action, or it
+can register an address entered manually. It proposes an editable name such as `location-1`, asks
+whether to activate the new location, and lists saved locations by index on later runs.
+
+Activation performs both required updates:
+
+1. It writes the selected `/32` to `sshAllowedCidr` in
+   `infra/dev.local.parameters.json`, creating that file from its tracked example if necessary.
+2. Unless `--local-only` is used, it discovers the resource group and NSG from the `velib-dev`
+   deployment and updates the live `AllowSshFromCaller` rule through Azure CLI.
+
+After locations are registered, activate one by name or index with one command:
 
 ```bash
-git check-ignore infra/ssh-locations.local.env
-set -a
-source infra/ssh-locations.local.env
-set +a
+make ssh-location SSH_LOCATION_ARGS=home
+make ssh-location SSH_LOCATION_ARGS=2
 ```
 
-Select one location for the current shell and update the existing NSG rule. List the resource
-group's NSGs if the name is not already known from Azure:
+Other non-interactive forms are available:
 
 ```bash
-selected_cidr=$VELIB_SSH_CIDR_PRIMARY  # or VELIB_SSH_CIDR_SECONDARY
+# Retrieve, save, and activate the current public IP under a chosen name.
+make ssh-location SSH_LOCATION_ARGS="--add-current cafe"
 
-az network nsg list --resource-group <RESOURCE_GROUP> --output table
-az network nsg rule update \
-  --resource-group <RESOURCE_GROUP> \
-  --nsg-name <NSG_NAME> \
-  --name AllowSshFromCaller \
-  --source-address-prefixes "$selected_cidr"
+# Save a supplied address under a name and activate it.
+make ssh-location SSH_LOCATION_ARGS="--save office 203.0.113.10"
+
+# Activate a supplied address without saving it.
+make ssh-location SSH_LOCATION_ARGS=203.0.113.10
+
+# Update only dev.local.parameters.json and skip Azure.
+make ssh-location SSH_LOCATION_ARGS="home --local-only"
 ```
 
-This changes the live SSH allowlist immediately; it does not update the default value in
-`infra/dev.local.parameters.json`. When running a later what-if or deployment, pass the selected
-CIDR as the final parameter so the template does not restore the old default:
+The default deployment name is `velib-dev`; use `--deployment NAME` for another subscription
+deployment. Azure updates require an authenticated Azure CLI session. Both local state files are
+ignored by Git, and the normal deployment commands can continue using
+`@infra/dev.local.parameters.json` without an override because the CLI keeps its active CIDR
+synchronized:
 
 ```bash
-az deployment sub what-if \
-  --name velib-dev \
-  --location francecentral \
-  --template-file infra/main.bicep \
-  --parameters @infra/dev.local.parameters.json \
-  --parameters sshAllowedCidr="$selected_cidr"
+git check-ignore infra/ssh-locations.local.json infra/dev.local.parameters.json
 ```
 
-Use the same final `--parameters sshAllowedCidr="$selected_cidr"` override with
-`az deployment sub create`. Keep only individual `/32` addresses; do not widen SSH access to
-`0.0.0.0/0`. Public IP addresses are not credentials, but keeping location-specific values local
-avoids publishing operational access details and prevents accidental stale defaults.
+Keep only individual `/32` addresses; the CLI rejects wider networks such as `0.0.0.0/0`.
+Public IP addresses are not credentials, but keeping location-specific values local avoids
+publishing operational access details.
 
 ## 2. Compile, review, then explicitly deploy
 
@@ -141,7 +145,9 @@ Angle-bracket values below are placeholders to replace, not literal shell syntax
 ### Security boundary
 
 - Ubuntu uses SSH keys for `azureuser`; password authentication is disabled.
-- The NSG permits inbound TCP 22 only from `sshAllowedCidr` and denies other inbound traffic. If your public IP changes, update the local parameters and redeploy after reviewing what-if.
+- The NSG permits inbound TCP 22 only from `sshAllowedCidr` and denies other inbound traffic. If
+  your public IP changes, use `make ssh-location`; it synchronizes the local
+  parameter and live NSG rule without a full infrastructure deployment.
 - PostgreSQL is not exposed publicly; it binds to VM loopback only.
 - Blob's HTTPS endpoint is publicly reachable, **not** behind a private endpoint. Container `velib-raw` is private; anonymous and shared-key access are disabled. OAuth/RBAC grants Storage Blob Data Contributor to the VM's system-assigned managed identity and deploying user.
 - No Function App or monitoring workspace is used.
