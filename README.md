@@ -194,7 +194,8 @@ Follow the [Azure VM runbook](docs/azure-vm.md). The supported workflow is **Azu
 - PostgreSQL 17 runs in Docker, bound only to `127.0.0.1:5432`, with persistent data on the VM OS disk.
 - The NSG allows only SSH from the supplied caller IPv4 `/32`; use an SSH tunnel for SQL access.
 - The Blob endpoint is publicly reachable, but `velib-raw` is private: OAuth access only, no anonymous or shared-key access. The VM's system-assigned managed identity and the deploying **user** receive Storage Blob Data Contributor.
-- No raw-data lifecycle deletion policy and no monitoring workspace are deployed.
+- Raw collections move from Hot to Cool after 30 days but are never deleted automatically. No
+  monitoring workspace is deployed.
 
 The first cloud deployment was verified on 2026-10-25 using `Standard_D2als_v7` in France Central; the default B-series size was unavailable. See the runbook for verification boundaries.
 
@@ -223,11 +224,13 @@ continued five-minute collections, and the presentation views over more than 500
 collections. A local Grafana instance connected through an SSH tunnel with a read-only database
 role and executed all 12 dashboard queries. After deploying manual reconciliation, Blob contained
 563 eligible raw collections and PostgreSQL contained all 563; a bounded reconcile correctly
-performed no writes. Reboot, a non-empty live backlog, and full recovery remain unverified.
+performed no writes. A later controlled test proved lease renewal beyond 60 seconds, automatic
+lease expiry after a killed process, persistence across VM reboot, a successful first scheduled
+collection after reboot, and a full 567-collection replay into a disposable database.
 
 Not yet verified:
 
-- subsequent scheduled invocations, PostgreSQL persistence across reboot/container replacement, or end-to-end cloud recovery;
+- replacement-host recovery, teardown export, or a non-empty live reconciliation;
 - source behavior during concurrent export updates, prolonged failures, schema changes, quota exhaustion, or anomalous clock skew.
 
 These boundaries are intentional and should be stated plainly in an interview.

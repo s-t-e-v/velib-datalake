@@ -83,11 +83,12 @@ def _metadata(
 
 def collect_once(settings: Settings, store: RawStore, client: ApiClient) -> CollectionMetadata:
     collection_id = str(uuid4())
-    with store.collection_lock():
+    with store.collection_lock() as collection_lock:
         LOGGER.info("collection_started collection_id=%s", collection_id)
         try:
             response = client.fetch(settings.source_url, settings.source_params)
         except SourceRequestError as exc:
+            collection_lock.ensure_owned()
             metadata = _metadata(
                 collection_id,
                 settings,
@@ -109,6 +110,7 @@ def collect_once(settings: Settings, store: RawStore, client: ApiClient) -> Coll
             raise CollectionFailed("Source request failed", collection_id) from exc
 
         if not 200 <= response.status_code < 300:
+            collection_lock.ensure_owned()
             metadata = _metadata(
                 collection_id,
                 settings,
@@ -132,6 +134,7 @@ def collect_once(settings: Settings, store: RawStore, client: ApiClient) -> Coll
             raise CollectionFailed(f"Source returned HTTP {response.status_code}", collection_id)
 
         validation = validate_export(response.body, settings.min_records)
+        collection_lock.ensure_owned()
         metadata = _metadata(
             collection_id,
             settings,

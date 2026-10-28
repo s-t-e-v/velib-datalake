@@ -60,8 +60,9 @@ One scheduled execution follows this sequence:
    randomized delay of up to 15 seconds.
 2. The service runs `velib collect --process` as the unprivileged `velib` user.
 3. The CLI reads environment configuration and creates the Azure raw-store implementation.
-4. The collector acquires an infinite lease on `locks/collector.lock`. Local development uses a
-   non-blocking file lock instead.
+4. The collector acquires a 60-second lease on `locks/collector.lock`, renews it every 20 seconds,
+   and retries transient renewal failures every two seconds. Local development uses a non-blocking
+   file lock instead.
 5. The HTTP client requests the complete JSON export with connect/read timeouts and bounded
    retries for selected transient failures.
 6. The response is validated for JSON structure, minimum record count, duplicate station IDs,
@@ -95,7 +96,8 @@ Local storage uses the configured raw directory followed by
 `metadata.json` is written last. A collection is eligible for processing only if the body exists
 and validation is `passed` or `passed_with_warnings`.
 
-Blob Storage is the durable source of truth. It has no configured lifecycle deletion policy.
+Blob Storage is the durable source of truth. A lifecycle rule moves collection objects from Hot
+to Cool after 30 days. It never deletes them automatically and does not apply to the lock blob.
 
 ### PostgreSQL serving layer
 
@@ -147,7 +149,7 @@ collection before presenting it as current information.
 | Interrupted body upload | Possible orphan response, no commit marker | No automatic orphan cleanup |
 | Metadata upload | Response may be orphaned | Next timer run uses a new collection ID |
 | SQL transformation/load | Eligible raw collection remains in Blob | Manual bounded reconciliation, targeted replay, or full rebuild |
-| Process death while lease held | Journal and possibly partial raw state | Manual lease break after safety checks |
+| Process death while lease held | Journal and possibly partial raw state | Lease expires within 60 seconds; manual break remains an exceptional fallback |
 | Missed schedule | Possibly inferable from adjacent metadata | Historical snapshot cannot be recreated |
 | PostgreSQL loss | Raw lake remains if Blob survives | Migrate and replay all eligible collections |
 
@@ -208,6 +210,8 @@ temporary uploaded release is deleted after bootstrap.
 
 The live deployment verified provisioning, bootstrap, managed-identity Blob writes, PostgreSQL
 migration and loading, continued timer-driven collections, authenticated Blob listing, indicator
-calculation, and the presentation dashboard through an SSH tunnel. Reboot recovery, prolonged
-source failures, and a full cloud rebuild have not yet been demonstrated. See the
-[VM runbook](../azure-vm.md) for commands and the exact verification record.
+calculation, and the presentation dashboard through an SSH tunnel. On 2026-10-27, controlled
+tests also verified lease renewal and crash expiry, PostgreSQL persistence and collection restart
+across a VM reboot, and a full 567-collection replay into a disposable database. Replacement-host
+recovery, prolonged source failures, and teardown export remain unverified. See the [VM
+runbook](../azure-vm.md) for commands and the exact verification record.

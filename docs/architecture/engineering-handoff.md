@@ -83,14 +83,12 @@ Possible incremental design:
 Avoid introducing a full orchestration platform before the required recovery semantics are
 understood.
 
-### P1: Remove the infinite-lease failure mode
+### Resolved: Remove the infinite-lease failure mode
 
-The Azure collector acquires an infinite Blob lease. A hard process or VM failure can leave the
-lock held indefinitely, requiring a careful manual lease break.
-
-Investigate a finite renewable lease or another lock with expiry. Any change must still prevent
-two collectors from committing overlapping runs and must be tested for process termination,
-slow requests, and temporary Azure errors.
+The Azure collector now acquires a 60-second renewable Blob lease. It renews every 20 seconds,
+retries transient renewal errors every two seconds, and checks ownership before committing raw
+data. On 2026-10-27, a controlled 75-second hold proved renewal beyond the original term; killing
+the owner left the blob locked initially and Azure reported it expired/unlocked after the term.
 
 ### Implemented foundation: Dashboard-neutral presentation contract
 
@@ -135,12 +133,15 @@ Run and record these exercises:
 
 ### P2: Control growth and replay cost
 
-There is no Blob lifecycle policy, partition catalog, or incremental replay index. Raw retention
-is intentional, but storage and listing costs will grow indefinitely. Full replay is linear in
-the number of collections.
+There is no partition catalog or incremental replay index. Raw retention is intentional, so
+storage and listing costs will grow indefinitely even with older objects in Cool. Full replay is
+linear in the number of collections.
 
-Measure actual growth before adding complexity. Then document a retention policy, archive tier,
-or manifest strategy based on the desired demonstration horizon and recovery requirements.
+The first measurement on 2026-10-27 found 1,145 objects using 378,352,174 bytes. At the current
+five-minute cadence and roughly 665 KB per response, raw growth is approximately 190 MB/day. The
+selected policy retains every collection, moves collection objects to Cool after 30 days, and
+never deletes automatically. This preserves rebuildability while reducing long-term capacity
+cost; replay from Cool has higher retrieval and transaction cost and remains linear.
 
 ### P2: Tighten data-quality and schema-change handling
 
@@ -231,10 +232,19 @@ Outcome: SQL reliably converges toward the durable raw lake.
 
 ### Step 5: Prove operations and recovery
 
-- Replace or harden the infinite lease.
-- Exercise reboot, database rebuild, replacement host, and lock recovery.
-- Add alerts only after health semantics are stable.
-- Define retention and teardown safeguards.
+Status: partially completed and live-verified on 2026-10-27. Finite lease renewal, killed-process
+lease expiry, VM reboot, PostgreSQL persistence, the first scheduled post-reboot collection, and a
+full 567-collection replay into a disposable database were exercised. The replay took about 3
+minutes 16 seconds. A 30-day Hot-to-Cool/no-deletion lifecycle rule and teardown checklist were
+added. Replacement-host recovery, teardown export, and external alert delivery remain open.
+
+- Replace or harden the infinite lease. Completed.
+- Exercise reboot, database rebuild, replacement host, and lock recovery. Completed except for a
+  replacement host.
+- Add alerts only after health semantics are stable. Health semantics are stable; external alert
+  delivery remains deferred because no monitoring destination or workspace is in scope.
+- Define retention and teardown safeguards. Completed in infrastructure and the VM runbook;
+  teardown export itself remains unverified.
 
 Outcome: operational claims are demonstrated rather than inferred.
 

@@ -48,6 +48,39 @@ resource rawContainer 'Microsoft.Storage/storageAccounts/blobServices/containers
   }
 }
 
+resource rawLifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05-01' = {
+  parent: storage
+  name: 'default'
+  properties: {
+    policy: {
+      rules: [
+        {
+          enabled: true
+          name: 'tier-old-raw-collections-to-cool'
+          type: 'Lifecycle'
+          definition: {
+            actions: {
+              baseBlob: {
+                tierToCool: {
+                  daysAfterModificationGreaterThan: 30
+                }
+              }
+            }
+            filters: {
+              blobTypes: [
+                'blockBlob'
+              ]
+              prefixMatch: [
+                'velib-raw/collections/'
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
 resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: 'nsg-velib-${token}'
   location: location

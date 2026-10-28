@@ -22,6 +22,9 @@ def configure_logging() -> None:
         level=logging.INFO,
         format="%(asctime)sZ %(levelname)s %(name)s %(message)s",
     )
+    # Azure SDK request/response logs are extremely verbose at INFO and obscure the pipeline's
+    # own operational events during a full replay. Warnings and errors remain visible.
+    logging.getLogger("azure").setLevel(logging.WARNING)
     logging.Formatter.converter = __import__("time").gmtime
 
 

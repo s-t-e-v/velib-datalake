@@ -1,16 +1,114 @@
 from __future__ import annotations
 
+import logging
 import os
+import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from .models import CollectionMetadata
+
+LOGGER = logging.getLogger(__name__)
+
+AZURE_LEASE_DURATION_SECONDS = 60
+AZURE_LEASE_RENEWAL_INTERVAL_SECONDS = 20
+AZURE_LEASE_RETRY_INTERVAL_SECONDS = 2
 
 
 class CollectionAlreadyRunning(RuntimeError):
     """Raised when another collector owns the lock."""
+
+
+class CollectionLockLost(RuntimeError):
+    """Raised when a collector can no longer prove that it owns the lock."""
+
+
+class CollectionLock(Protocol):
+    def ensure_owned(self) -> None: ...
+
+
+class _LocalCollectionLock:
+    def ensure_owned(self) -> None:
+        pass
+
+
+class _RenewableAzureLease:
+    def __init__(
+        self,
+        lease: Any,
+        *,
+        duration_seconds: float = AZURE_LEASE_DURATION_SECONDS,
+        renewal_interval_seconds: float = AZURE_LEASE_RENEWAL_INTERVAL_SECONDS,
+        retry_interval_seconds: float = AZURE_LEASE_RETRY_INTERVAL_SECONDS,
+    ) -> None:
+        self.lease = lease
+        self.duration_seconds = duration_seconds
+        self.renewal_interval_seconds = renewal_interval_seconds
+        self.retry_interval_seconds = retry_interval_seconds
+        self._last_renewed_at = time.monotonic()
+        self._lost: CollectionLockLost | None = None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._renew_until_stopped,
+            name="velib-blob-lease-renewer",
+            daemon=True,
+        )
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join()
+
+    def ensure_owned(self) -> None:
+        if self._lost is not None:
+            raise self._lost
+        if time.monotonic() - self._last_renewed_at >= self.duration_seconds:
+            self._lost = CollectionLockLost("The Azure collection lease expired")
+            raise self._lost
+
+    @staticmethod
+    def _lease_was_lost(exc: Exception) -> bool:
+        return getattr(exc, "error_code", None) in {
+            "LeaseIdMismatchWithLeaseOperation",
+            "LeaseLost",
+            "LeaseNotPresentWithLeaseOperation",
+        }
+
+    def _renew_once(self) -> float:
+        try:
+            self.lease.renew()
+        except Exception as exc:
+            if self._lease_was_lost(exc):
+                self._lost = CollectionLockLost("The Azure collection lease was lost")
+                self._lost.__cause__ = exc
+                return self.retry_interval_seconds
+            if time.monotonic() - self._last_renewed_at >= self.duration_seconds:
+                self._lost = CollectionLockLost(
+                    "The Azure collection lease expired after renewal failures"
+                )
+                self._lost.__cause__ = exc
+                return self.retry_interval_seconds
+            LOGGER.warning(
+                "collection_lease_renewal_failed retry_seconds=%s error_type=%s",
+                self.retry_interval_seconds,
+                type(exc).__name__,
+            )
+            return self.retry_interval_seconds
+        self._last_renewed_at = time.monotonic()
+        return self.renewal_interval_seconds
+
+    def _renew_until_stopped(self) -> None:
+        delay = self.renewal_interval_seconds
+        while not self._stop.wait(delay):
+            delay = self._renew_once()
+            if self._lost is not None:
+                LOGGER.error("collection_lease_lost")
+                return
 
 
 class RawStore(Protocol):
@@ -21,7 +119,7 @@ class RawStore(Protocol):
     def list_metadata(self) -> list[CollectionMetadata]: ...
 
     @contextmanager
-    def collection_lock(self) -> Iterator[None]: ...
+    def collection_lock(self) -> Iterator[CollectionLock]: ...
 
 
 class LocalRawStore:
@@ -74,7 +172,7 @@ class LocalRawStore:
         return sorted(metadata, key=lambda item: item.request_started_at)
 
     @contextmanager
-    def collection_lock(self) -> Iterator[None]:
+    def collection_lock(self) -> Iterator[CollectionLock]:
         import fcntl
 
         self.root.mkdir(parents=True, exist_ok=True)
@@ -85,7 +183,7 @@ class LocalRawStore:
             except BlockingIOError as exc:
                 raise CollectionAlreadyRunning("Another local collection is running") from exc
             try:
-                yield
+                yield _LocalCollectionLock()
             finally:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
@@ -153,7 +251,7 @@ class AzureBlobRawStore:
         return sorted(items, key=lambda item: item.request_started_at)
 
     @contextmanager
-    def collection_lock(self) -> Iterator[None]:
+    def collection_lock(self) -> Iterator[CollectionLock]:
         from azure.core.exceptions import HttpResponseError, ResourceExistsError
         from azure.storage.blob import BlobLeaseClient
 
@@ -164,15 +262,36 @@ class AzureBlobRawStore:
             pass
         lease = BlobLeaseClient(lock_blob)
         try:
-            lease.acquire(lease_duration=-1)
+            lease.acquire(lease_duration=AZURE_LEASE_DURATION_SECONDS)
         except HttpResponseError as exc:
             if getattr(exc, "error_code", None) != "LeaseAlreadyPresent":
                 raise
             raise CollectionAlreadyRunning(
                 "Another Azure collection owns the blob lease"
             ) from exc
+        renewable_lease = _RenewableAzureLease(lease)
+        renewable_lease.start()
+        operation_failed = False
         try:
-            yield
+            yield renewable_lease
+            renewable_lease.ensure_owned()
+        except BaseException:
+            operation_failed = True
+            raise
         finally:
-            lease.release()
+            renewable_lease.stop()
+            try:
+                lease.release()
+            except HttpResponseError:
+                if operation_failed:
+                    LOGGER.exception("collection_lease_release_failed after_operation_error=true")
+                else:
+                    # A lease already known to be lost or expired needs no cleanup. Any other
+                    # release failure remains operationally significant and must fail the service.
+                    try:
+                        renewable_lease.ensure_owned()
+                    except CollectionLockLost:
+                        LOGGER.warning("collection_lease_release_skipped lease_already_lost=true")
+                    else:
+                        raise
 

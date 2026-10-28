@@ -137,8 +137,7 @@ The bootstrap contract is:
 - Enable the timer and start collection immediately after migration.
 
 Initial installation and live collection were verified on 2026-10-25. Continued scheduled
-collections and the SSH-tunnel dashboard were verified on 2026-10-27. Reboot recovery still
-requires verification.
+collections, the SSH-tunnel dashboard, and reboot recovery were verified on 2026-10-27.
 
 ## 4. Operate and inspect
 
@@ -181,15 +180,40 @@ only missing bodies. Full replay downloads and writes every eligible collection,
 transaction costs grow with the lake. If required, target one collection with
 `sudo velib-admin process --collection-id <COLLECTION_ID>`.
 
-### Recover an abandoned collection lock
+### Collector lock recovery
 
-The existing Blob collector uses an infinite lease on `locks/collector.lock`. If the VM or process is killed mid-collection, that lease can remain held. Only after confirming no collector is active (stop the timer and collector service on every host using this lake), break the abandoned lease from your laptop:
+The collector uses a 60-second lease on `locks/collector.lock`, renews it every 20 seconds, and
+retries transient renewal errors every two seconds. It checks ownership before committing raw
+data. If the process or VM dies, wait at least 60 seconds; the fixed lease should become available
+without operator action. Inspect it from your laptop:
+
+```bash
+az storage blob show \
+  --account-name <RAW_STORAGE_ACCOUNT_NAME> \
+  --container-name velib-raw \
+  --name locks/collector.lock \
+  --auth-mode login \
+  --query 'properties.lease'
+```
+
+Only if Azure still reports a lease after the expiry window, confirm no collector is active on
+any host, stop every timer and collector service using this lake, and break the lease:
 
 ```bash
 az storage blob lease break --account-name <RAW_STORAGE_ACCOUNT_NAME> --container-name velib-raw --blob-name locks/collector.lock --auth-mode login
 ```
 
-Wait for the lease break to complete, then restart the VM's timer. Do not break a live collector's lease.
+Wait for the lease break to complete, then restart the VM's timer. Do not break a live collector's
+lease.
+
+### Test a rebuild without deleting the live database
+
+For a recovery exercise, stop collection so the expected raw count is stable, create a disposable
+database, override only the database name in `DATABASE_URL`, migrate, and run the full replay.
+Validate `raw_collection`, `station_observation`, and `pipeline_health` before dropping the test
+database and restarting the timer. Never print the URL because it contains the database password.
+The 2026-10-27 exercise used `velib_recovery_test`; it replayed 567 collections in about 3 minutes
+16 seconds while leaving the live `velib` database unchanged.
 
 ### Inspect Blob from your laptop
 
@@ -224,9 +248,29 @@ Use the configured database/user and generated password with a PostgreSQL client
 
 ## 5. Durability and teardown
 
-Blob is the durable source of truth and has **no automatic raw-data deletion lifecycle**. Monitor storage growth and cost. PostgreSQL data survives container replacement/reboots via `/var/lib/velib/postgres`, but this is on the VM OS disk, not a separate database backup. The template deletes the OS disk with the VM: deleting that disk loses SQL. Rebuild SQL by migrating and replaying retained eligible blobs on a replacement host.
+Blob is the durable source of truth. The lifecycle policy moves only
+`velib-raw/collections/` block blobs from Hot to Cool after 30 days and never deletes them. The
+lock blob remains Hot. On 2026-10-27 the lake used 378,352,174 bytes across 1,145 objects;
+five-minute responses of roughly 665 KB imply about 190 MB/day of raw growth. Monitor actual
+capacity and retrieval cost. Replaying Cool data remains supported but costs more in retrieval
+and transactions.
+
+PostgreSQL data survives container replacement/reboots via `/var/lib/velib/postgres`, but this is
+on the VM OS disk, not a separate database backup. The template deletes the OS disk with the VM:
+deleting that disk loses SQL. Rebuild SQL by migrating and replaying retained eligible blobs on a
+replacement host.
 
 **Deleting the resource group destroys the Blob lake as well as the VM and database.** Export/retain anything required elsewhere first. Only when intentional, using the actual output value:
+
+Before teardown:
+
+1. Stop the collection timer and wait for any active collection to finish.
+2. Record the source object count and total bytes with authenticated `az storage blob list`.
+3. Copy `velib-raw` to storage outside this resource group or to durable local storage.
+4. Compare destination object count and bytes with the source and test-read sample metadata and
+   response pairs.
+5. Record the last SQL collection count and, if SQL itself must be retained, export it separately.
+6. Delete the group only after the retained copy is independently accessible.
 
 ```bash
 # Destructive; Azure prompts for confirmation. This deletes the lake too.
@@ -243,7 +287,10 @@ Grafana connected through the Docker-gateway SSH tunnel. All 12 provisioned pane
 succeeded. Manual reconciliation was then deployed: `velib-admin backlog` reported 563 eligible
 raw collections and 563 processed collections, and `reconcile --limit 1` correctly performed no
 writes. This verifies continued scheduling, the private dashboard path, and zero-backlog
-inspection, but not a non-empty live reconciliation, reboot, database recovery, replacement-host
-recovery, or full replay.
+inspection, but not a non-empty live reconciliation. Later that day, a 75-second controlled lease
+hold proved renewal, a killed owner proved automatic expiry, and a VM reboot preserved all 566
+pre-reboot collections; the first scheduled run after boot increased SQL to 567. A full replay of
+those 567 collections into a disposable database completed in about 3 minutes 16 seconds without
+altering the live database. Replacement-host recovery and teardown export remain unverified.
 
 Local validation: Bicep compilation passed previously; shell syntax, lint, and 15 tests passed after adding deployment automation. One PostgreSQL integration test was skipped because `TEST_DATABASE_URL` was unset. Mocked script tests cover endpoint discovery, allowlisted upload, strict host-key checks, rejection of unexpected storage URLs, and stopping on SSH failure; they do not replace the live/recovery checks above.
