@@ -1,7 +1,7 @@
 # Current architecture
 
 - Status: Implemented first vertical slice
-- Last reviewed: 2026-10-27
+- Last reviewed: 2026-10-28
 - Historical decision: [ADR 0001](0001-initial-vertical-slice.md)
 - Improvement backlog: [Engineering handoff](engineering-handoff.md)
 
@@ -14,9 +14,9 @@ one indicator:
 > Among stations open for rental with valid and sufficiently fresh observations, what
 > proportion have zero available bicycles?
 
-This slice does not yet ingest station reference data or cycling infrastructure. It has no
-dashboard, spatial model, general-purpose orchestrator, monitoring workspace, or automatic
-alerting.
+This slice does not yet ingest station reference data or cycling infrastructure. It has a private
+workstation Grafana dashboard, but no spatial model, general-purpose orchestrator, monitoring
+workspace, or automatic alerting.
 
 The system is more precisely described as a near-real-time snapshot pipeline than as a streaming
 system.
@@ -159,9 +159,10 @@ metadata, but reconciliation downloads and transforms only the bounded missing b
 is `velib process`; targeted replay uses `--collection-id`. All writes are idempotent through SQL
 upserts. Reconciliation remains a manual operator action rather than an automatic timer behavior.
 On 2026-10-27, the first live backlog inspection found 563 eligible raw collections and all 563 in
-PostgreSQL. A bounded live reconciliation therefore selected and wrote zero collections. The
-positive recovery path is covered locally, but has not yet been exercised against a real live
-backlog.
+PostgreSQL. A bounded live reconciliation therefore selected and wrote zero collections. On
+2026-10-28, a replacement Azure VM started with an empty database, rebuilt 833 retained
+collections, and then reconciled the one collection that arrived during replay. It reached 834 of
+834 eligible collections with zero backlog.
 
 ## Operational views available today
 
@@ -212,6 +213,7 @@ The live deployment verified provisioning, bootstrap, managed-identity Blob writ
 migration and loading, continued timer-driven collections, authenticated Blob listing, indicator
 calculation, and the presentation dashboard through an SSH tunnel. On 2026-10-27, controlled
 tests also verified lease renewal and crash expiry, PostgreSQL persistence and collection restart
-across a VM reboot, and a full 567-collection replay into a disposable database. Replacement-host
-recovery, prolonged source failures, and teardown export remain unverified. See the [VM
-runbook](../azure-vm.md) for commands and the exact verification record.
+across a VM reboot, and a full 567-collection replay into a disposable database. On 2026-10-28, a
+separate replacement VM was bootstrapped against the retained lake and converged to zero backlog.
+Prolonged source failures and teardown export remain unverified. See the [VM runbook](../azure-vm.md)
+for commands and the exact verification record.

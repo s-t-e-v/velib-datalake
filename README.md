@@ -228,10 +228,12 @@ role and executed all 12 dashboard queries. After deploying manual reconciliatio
 performed no writes. A later controlled test proved lease renewal beyond 60 seconds, automatic
 lease expiry after a killed process, persistence across VM reboot, a successful first scheduled
 collection after reboot, and a full 567-collection replay into a disposable database.
+On 2026-10-28, a separate replacement Azure VM rebuilt 833 retained collections into fresh
+PostgreSQL, then reconciled one newly arrived collection and reached 834 of 834 with zero backlog.
 
 Not yet verified:
 
-- replacement-host recovery, teardown export, or a non-empty live reconciliation;
+- teardown export;
 - source behavior during concurrent export updates, prolonged failures, schema changes, quota exhaustion, or anomalous clock skew.
 
 These boundaries are intentional and should be stated plainly in an interview.

@@ -1,7 +1,7 @@
 # Engineering handoff
 
 - Status: Living assessment and improvement backlog
-- Last reviewed: 2026-10-27
+- Last reviewed: 2026-10-28
 - System description: [Current architecture](current-architecture.md)
 
 ## Purpose
@@ -70,8 +70,9 @@ those signals before a monitoring product can answer the complete question.
 ### P1: Close the raw-to-SQL recovery gap
 
 `collect --process` processes only its current collection. If SQL loading fails after raw commit,
-later timer runs do not automatically backfill that collection. Manual full replay is possible,
-but it rereads every eligible historical collection.
+later timer runs do not automatically backfill that collection. Manual bounded reconciliation is
+available, but automatic backfill remains intentionally disabled until a recurring failure pattern
+justifies it.
 
 Possible incremental design:
 
@@ -117,19 +118,21 @@ Decide whether location belongs in a slowly changing station dimension or in eve
 A station dimension is likely cleaner, but station-code stability and replacement semantics are
 not guaranteed by the source and need an explicit policy.
 
-### P2: Test durability and disaster recovery
+### P2: Complete durability and disaster recovery safeguards
 
 PostgreSQL uses the VM OS disk and has no independent backup. Blob is rebuildable source data but
 the resource group contains both Blob and the VM, so deleting the group destroys both copies.
 
-Run and record these exercises:
+The following exercises were completed on 2026-10-27 and 2026-10-28:
 
 - later scheduled execution and collection continuity;
 - VM reboot and PostgreSQL container recreation;
 - abandoned-lock recovery;
 - database deletion followed by migration and targeted/full replay;
-- replacement-VM bootstrap using the retained lake;
-- separate export/retention before resource-group teardown.
+- replacement-VM bootstrap using the retained lake.
+
+A separate export or retention boundary outside the resource group is still required before
+teardown if the retained raw history must survive deletion of that group.
 
 ### P2: Control growth and replay cost
 
@@ -217,9 +220,10 @@ Outcome: a showcase that is demonstrable on Linux without coupling the data mode
 
 Status: manual reconciliation implemented and deployed on 2026-10-27. Live inspection found 563
 eligible raw collections and all 563 already processed; bounded reconciliation correctly selected
-zero. The positive recovery path is tested locally but has not been exercised against a non-empty
-live backlog. Automatic backfill is not justified yet because there is no observed recurring
-backlog or measured failure pattern.
+zero. On 2026-10-28, a replacement Azure VM rebuilt 833 collections and then used bounded
+reconciliation to process the one collection that arrived during replay, reaching 834 of 834 with
+zero backlog. Automatic backfill is not justified yet because there is no observed recurring
+production backlog or measured failure pattern.
 
 - Expose raw-versus-processed backlog. Implemented by `velib backlog`.
 - Add targeted chronological reconciliation. Implemented by `velib reconcile --limit N`.
@@ -232,15 +236,17 @@ Outcome: SQL reliably converges toward the durable raw lake.
 
 ### Step 5: Prove operations and recovery
 
-Status: partially completed and live-verified on 2026-10-27. Finite lease renewal, killed-process
-lease expiry, VM reboot, PostgreSQL persistence, the first scheduled post-reboot collection, and a
-full 567-collection replay into a disposable database were exercised. The replay took about 3
-minutes 16 seconds. A 30-day Hot-to-Cool/no-deletion lifecycle rule and teardown checklist were
-added. Replacement-host recovery, teardown export, and external alert delivery remain open.
+Status: substantially completed and live-verified on 2026-10-27 and 2026-10-28. Finite lease
+renewal, killed-process lease expiry, VM reboot, PostgreSQL persistence, the first scheduled
+post-reboot collection, and a full 567-collection replay into a disposable database were
+exercised. A separate replacement Azure VM was then bootstrapped against the retained lake and
+rebuilt 833 collections into fresh PostgreSQL in 6 minutes 25 seconds. Bounded reconciliation
+processed one collection that arrived during replay, reaching 834 of 834 with zero backlog and a
+valid indicator. A 30-day Hot-to-Cool/no-deletion lifecycle rule and teardown checklist were
+added. Teardown export and external alert delivery remain open.
 
 - Replace or harden the infinite lease. Completed.
-- Exercise reboot, database rebuild, replacement host, and lock recovery. Completed except for a
-  replacement host.
+- Exercise reboot, database rebuild, replacement host, and lock recovery. Completed.
 - Add alerts only after health semantics are stable. Health semantics are stable; external alert
   delivery remains deferred because no monitoring destination or workspace is in scope.
 - Define retention and teardown safeguards. Completed in infrastructure and the VM runbook;

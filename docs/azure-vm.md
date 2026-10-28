@@ -350,6 +350,19 @@ inspection, but not a non-empty live reconciliation. Later that day, a 75-second
 hold proved renewal, a killed owner proved automatic expiry, and a VM reboot preserved all 566
 pre-reboot collections; the first scheduled run after boot increased SQL to 567. A full replay of
 those 567 collections into a disposable database completed in about 3 minutes 16 seconds without
-altering the live database. Replacement-host recovery and teardown export remain unverified.
+altering the live database.
+
+On 2026-10-28, a separate `Standard_D2als_v7` Azure VM in `rg-velib-recovery` was created with a
+fresh OS disk, fresh PostgreSQL volume, separate network, and system-assigned identity. That
+identity received Storage Blob Data Contributor only on the existing raw storage account. The
+repository bootstrap succeeded against the retained lake. With its collection timer stopped, the
+fresh database reported 833 eligible raw collections, zero processed collections, and a backlog
+of 833. Full replay processed all 833 in 6 minutes 25 seconds. Bounded reconciliation then
+processed the one collection produced by the live host during replay, reaching 834 processed of
+834 eligible with zero backlog. The recovered latest indicator had 1,520 source records and a
+non-null denominator. The recovery VM was deallocated after verification; its resource group was
+left intact for inspection. This proves replacement-host bootstrap, lake access through a new
+managed identity, full SQL reconstruction, and positive bounded reconciliation. Teardown export
+remains unverified.
 
 Local validation: Bicep compilation passed previously; shell syntax, lint, and 15 tests passed after adding deployment automation. One PostgreSQL integration test was skipped because `TEST_DATABASE_URL` was unset. Mocked script tests cover endpoint discovery, allowlisted upload, strict host-key checks, rejection of unexpected storage URLs, and stopping on SSH failure; they do not replace the live/recovery checks above.
