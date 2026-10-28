@@ -50,6 +50,59 @@ git check-ignore infra/dev.local.parameters.json
 
 Do not commit the local file. Use `infra/dev.local.parameters.json`, not `infra/dev.parameters.json`.
 
+### Switch between trusted SSH locations
+
+`infra/dev.local.parameters.json` contains the default `sshAllowedCidr`, but operators who move
+between known locations can keep named CIDRs in a separate untracked file. Create it from the
+tracked example and use meaningful variable names if `PRIMARY` and `SECONDARY` are unclear:
+
+```bash
+cp infra/ssh-locations.local.env.example infra/ssh-locations.local.env
+curl -4 https://api.ipify.org
+```
+
+Edit `infra/ssh-locations.local.env`, store each public outbound IPv4 address with a `/32` suffix,
+and confirm Git ignores it:
+
+```bash
+git check-ignore infra/ssh-locations.local.env
+set -a
+source infra/ssh-locations.local.env
+set +a
+```
+
+Select one location for the current shell and update the existing NSG rule. List the resource
+group's NSGs if the name is not already known from Azure:
+
+```bash
+selected_cidr=$VELIB_SSH_CIDR_PRIMARY  # or VELIB_SSH_CIDR_SECONDARY
+
+az network nsg list --resource-group <RESOURCE_GROUP> --output table
+az network nsg rule update \
+  --resource-group <RESOURCE_GROUP> \
+  --nsg-name <NSG_NAME> \
+  --name AllowSshFromCaller \
+  --source-address-prefixes "$selected_cidr"
+```
+
+This changes the live SSH allowlist immediately; it does not update the default value in
+`infra/dev.local.parameters.json`. When running a later what-if or deployment, pass the selected
+CIDR as the final parameter so the template does not restore the old default:
+
+```bash
+az deployment sub what-if \
+  --name velib-dev \
+  --location francecentral \
+  --template-file infra/main.bicep \
+  --parameters @infra/dev.local.parameters.json \
+  --parameters sshAllowedCidr="$selected_cidr"
+```
+
+Use the same final `--parameters sshAllowedCidr="$selected_cidr"` override with
+`az deployment sub create`. Keep only individual `/32` addresses; do not widen SSH access to
+`0.0.0.0/0`. Public IP addresses are not credentials, but keeping location-specific values local
+avoids publishing operational access details and prevents accidental stale defaults.
+
 ## 2. Compile, review, then explicitly deploy
 
 Run from the repository root. Compilation does not provision resources; what-if queries Azure; create provisions billable resources. Review the templates and what-if output before running create.

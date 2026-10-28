@@ -9,6 +9,7 @@ htmlcov/
 dist/
 raw/
 *.local.parameters.json
+infra/ssh-locations.local.env
 infra/main.json
 infra/modules/vm-stack.json
 
