@@ -1,7 +1,7 @@
 # Current architecture
 
-- Status: Implemented first vertical slice
-- Last reviewed: 2026-10-28
+- Status: Implemented first vertical slice; Azure deployment torn down on 2026-10-30
+- Last reviewed: 2026-10-30
 - Historical decision: [ADR 0001](0001-initial-vertical-slice.md)
 - Improvement backlog: [Engineering handoff](engineering-handoff.md)
 
@@ -20,6 +20,10 @@ workspace, or automatic alerting.
 
 The system is more precisely described as a near-real-time snapshot pipeline than as a streaming
 system.
+
+The topology below is the implemented and reproducible deployment design. No Azure runtime is
+currently active. The retained raw lake was exported locally before teardown and can be restored
+into a newly provisioned storage account.
 
 ## Runtime topology
 
@@ -216,5 +220,7 @@ calculation, and the presentation dashboard through an SSH tunnel. On 2026-10-27
 tests also verified lease renewal and crash expiry, PostgreSQL persistence and collection restart
 across a VM reboot, and a full 567-collection replay into a disposable database. On 2026-10-28, a
 separate replacement VM was bootstrapped against the retained lake and converged to zero backlog.
-Prolonged source failures and teardown export remain unverified. See the [VM runbook](../azure-vm.md)
-for commands and the exact verification record.
+On 2026-10-30, the timer was stopped at 1,305 eligible collections with zero backlog. All 2,638
+collection objects were exported and verified against Azure MD5 values before both project
+resource groups were deleted. Prolonged source failures remain unverified. See the [VM
+runbook](../azure-vm.md) for commands and the exact verification record.

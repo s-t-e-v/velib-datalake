@@ -1,7 +1,7 @@
 # Engineering handoff
 
 - Status: Living assessment and improvement backlog
-- Last reviewed: 2026-10-28
+- Last reviewed: 2026-10-30
 - System description: [Current architecture](current-architecture.md)
 
 ## Purpose
@@ -112,21 +112,22 @@ Decide whether location belongs in a slowly changing station dimension or in eve
 A station dimension is likely cleaner, but station-code stability and replacement semantics are
 not guaranteed by the source and need an explicit policy.
 
-### P2: Complete durability and disaster recovery safeguards
+### Resolved: Complete durability and disaster recovery safeguards
 
 PostgreSQL uses the VM OS disk and has no independent backup. Blob is rebuildable source data but
 the resource group contains both Blob and the VM, so deleting the group destroys both copies.
 
-The following exercises were completed on 2026-10-27 and 2026-10-28:
+The following exercises were completed between 2026-10-27 and 2026-10-30:
 
 - later scheduled execution and collection continuity;
 - VM reboot and PostgreSQL container recreation;
 - abandoned-lock recovery;
 - database deletion followed by migration and targeted/full replay;
-- replacement-VM bootstrap using the retained lake.
+- replacement-VM bootstrap using the retained lake;
+- a complete local export verified against Azure MD5 values before resource-group teardown.
 
-A separate export or retention boundary outside the resource group is still required before
-teardown if the retained raw history must survive deletion of that group.
+PostgreSQL itself was not exported. It remains reproducibly rebuildable from the retained raw
+collections.
 
 ### P2: Control growth and replay cost
 
@@ -230,21 +231,21 @@ Outcome: SQL reliably converges toward the durable raw lake.
 
 ### Step 5: Prove operations and recovery
 
-Status: substantially completed and live-verified on 2026-10-27 and 2026-10-28. Finite lease
+Status: completed and live-verified between 2026-10-27 and 2026-10-30. Finite lease
 renewal, killed-process lease expiry, VM reboot, PostgreSQL persistence, the first scheduled
 post-reboot collection, and a full 567-collection replay into a disposable database were
 exercised. A separate replacement Azure VM was then bootstrapped against the retained lake and
 rebuilt 833 collections into fresh PostgreSQL in 6 minutes 25 seconds. Bounded reconciliation
 processed one collection that arrived during replay, reaching 834 of 834 with zero backlog and a
 valid indicator. A 30-day Hot-to-Cool/no-deletion lifecycle rule and teardown checklist were
-added. Teardown export and external alert delivery remain open.
+added. The final lake contained 1,305 eligible collections with zero backlog. Its 2,638 collection
+objects were exported locally and verified before both Azure resource groups were deleted.
 
 - Replace or harden the infinite lease. Completed.
 - Exercise reboot, database rebuild, replacement host, and lock recovery. Completed.
 - Add alerts only after health semantics are stable. Health semantics are stable; external alert
   delivery remains deferred because no monitoring destination or workspace is in scope.
-- Define retention and teardown safeguards. Completed in infrastructure and the VM runbook;
-  teardown export itself remains unverified.
+- Define retention and teardown safeguards. Completed and exercised.
 
 Outcome: operational claims are demonstrated rather than inferred.
 

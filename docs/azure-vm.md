@@ -52,8 +52,20 @@ Do not commit the local file. Use `infra/dev.local.parameters.json`, not `infra/
 
 ### Switch between trusted SSH locations
 
-Use the repository CLI from the repository root. With no arguments it creates the ignored
-`infra/ssh-locations.local.json` registry if needed and presents an interactive menu:
+Use the repository CLI from the repository root. Before the first deployment, use `--local-only`
+because no live NSG exists yet. This command detects and saves the current public IPv4, creates
+the ignored parameter file from its tracked example if needed, and updates `sshAllowedCidr`:
+
+```bash
+make ssh-location SSH_LOCATION_ARGS="--add-current home --local-only"
+```
+
+Fill the remaining placeholders in `infra/dev.local.parameters.json` manually. The helper does
+not create an SSH key, discover the deploying user's object ID, provision infrastructure, or
+deploy the application.
+
+After the first deployment, run the helper without `--local-only`. With no arguments it creates
+the ignored `infra/ssh-locations.local.json` registry if needed and presents an interactive menu:
 
 ```bash
 make ssh-location
@@ -63,7 +75,7 @@ The menu can retrieve the current public IPv4 only after the operator selects th
 can register an address entered manually. It proposes an editable name such as `location-1`, asks
 whether to activate the new location, and lists saved locations by index on later runs.
 
-Activation performs both required updates:
+Activation after deployment performs both required updates:
 
 1. It writes the selected `/32` to `sshAllowedCidr` in
    `infra/dev.local.parameters.json`, creating that file from its tracked example if necessary.
@@ -336,6 +348,31 @@ Before teardown:
 az group delete --name <RESOURCE_GROUP>
 ```
 
+### Restore exported collections
+
+Provision the infrastructure first, but restore the collection objects before bootstrapping the
+application when possible. For the verified 2026-10-30 backup:
+
+```bash
+cd ~/backups/velib-raw-2026-10-30
+sha256sum --check SHA256SUMS
+
+az storage blob upload-batch \
+  --account-name <NEW_RAW_STORAGE_ACCOUNT_NAME> \
+  --destination velib-raw \
+  --source . \
+  --pattern 'collections/*' \
+  --auth-mode login \
+  --validate-content \
+  --overwrite false
+```
+
+The upload preserves the `collections/YYYY/MM/DD/<collection-id>/...` names referenced by each
+metadata file. Do not restore `locks/collector.lock`; a new deployment creates its own lock blob.
+Compare the uploaded object count and byte total with `azure-manifest.json`, then bootstrap,
+migrate, and run `velib process` to rebuild PostgreSQL. The backup does not contain a PostgreSQL
+dump.
+
 ## Validation boundary
 
 On 2026-10-25, Azure provisioning succeeded in France Central with the explicit override `vmSize=Standard_D2als_v7` (the original B-series candidates were unavailable). Application deployment through `make vm-deploy` then succeeded: PostgreSQL migration, managed-identity Blob writes, raw-first SQL loading, and indicator output were observed. The first collection had 1,519 source records; 48 of 1,349 eligible stations had zero bicycles. Authenticated Blob listing from the laptop confirmed both response and metadata files. The timer was active with its next invocation scheduled. At that time, no reboot, later timer invocation, database recovery, or full replay had been tested. The current local parameters/template default may still name a B-series size: retain the `vmSize=Standard_D2als_v7` override when reviewing or repeating infrastructure deployment, and review its non-free compute price first.
@@ -364,5 +401,15 @@ non-null denominator. The recovery VM was deallocated after verification; its re
 left intact for inspection. This proves replacement-host bootstrap, lake access through a new
 managed identity, full SQL reconstruction, and positive bounded reconciliation. Teardown export
 remains unverified.
+
+On 2026-10-30, the live collection timer was stopped and the final database reported 1,305
+eligible raw collections, 1,305 processed collections, and zero backlog. The `collections/`
+prefix contained 2,638 objects totaling 868,755,395 bytes across 1,319 response/metadata pairs.
+All objects were downloaded to `~/backups/velib-raw-2026-10-30`; every local byte count and MD5
+matched the Azure manifest, all metadata parsed, and the 14 non-JSON response bodies corresponded
+exactly to the 14 intentionally retained ineligible attempts. A local `SHA256SUMS` file and
+`azure-manifest.json` were retained with the backup. Both `rg-velib-dev` and
+`rg-velib-recovery` were then deleted. PostgreSQL was not exported because it is rebuildable from
+the retained raw lake.
 
 Local validation: Bicep compilation passed previously; shell syntax, lint, and 15 tests passed after adding deployment automation. One PostgreSQL integration test was skipped because `TEST_DATABASE_URL` was unset. Mocked script tests cover endpoint discovery, allowlisted upload, strict host-key checks, rejection of unexpected storage URLs, and stopping on SSH failure; they do not replace the live/recovery checks above.
